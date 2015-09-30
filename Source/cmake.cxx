@@ -42,6 +42,10 @@
 #endif
 
 #if defined(CMAKE_BUILD_WITH_CMAKE)
+# define CMAKE_USE_ANDROID_GRADLE
+#endif
+
+#if defined(CMAKE_BUILD_WITH_CMAKE)
 #  define CMAKE_USE_ECLIPSE
 #endif
 
@@ -92,6 +96,10 @@
 
 #ifdef CMAKE_USE_ECLIPSE
 # include "cmExtraEclipseCDT4Generator.h"
+#endif
+
+#ifdef CMAKE_USE_ANDROID_GRADLE
+# include "cmExtraAndroidGradleGenerator.h"
 #endif
 
 #include <stdlib.h> // required for atoi
@@ -903,6 +911,8 @@ void cmake::AddDefaultExtraGenerators()
   // e.g. kdevelop4 ?
 #endif
 
+  this->AddExtraGenerator(cmExtraAndroidGradleGenerator::GetActualName(),
+                          &cmExtraAndroidGradleGenerator::New);
   this->AddExtraGenerator(cmExtraCodeBlocksGenerator::GetActualName(),
                           &cmExtraCodeBlocksGenerator::New);
   this->AddExtraGenerator(cmExtraCodeLiteGenerator::GetActualName(),

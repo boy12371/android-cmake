@@ -579,6 +579,7 @@ if(BUILD_TESTING)
       OUTPUT_VARIABLE cmakeOutput ERROR_VARIABLE cmakeOutput)
 
     set(extraGenerators
+      "Android Gradle"
       "CodeBlocks"
       "Eclipse CDT4"
       "KDevelop3")
