@@ -235,7 +235,14 @@ std::vector<std::string> cmExtraAndroidGradleGenerator
         skipping = false;
     }
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    if (c == '"' && (current.empty() || current.back() != '\\'))
+    {
+      quoting = !quoting;
+      current.push_back(c);
+      continue;
+    }
+#else
     if (escaping)
     {
       current.push_back(c);
@@ -248,21 +255,13 @@ std::vector<std::string> cmExtraAndroidGradleGenerator
       escaping = true;
       continue;
     }
-#endif
 
     if (c == '"')
     {
-#if defined(_WIN32)
-      if (!current.empty() && current.back() == '\\')
-      {
-        current.back() = '"';
-        continue;
-      }
-#endif
-
       quoting = !quoting;
       continue;
     }
+#endif
 
     if (!quoting && isspace(c))
     {
