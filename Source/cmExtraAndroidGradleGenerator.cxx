@@ -236,9 +236,13 @@ std::vector<std::string> cmExtraAndroidGradleGenerator
     }
 
 #if defined(_WIN32)
-    if (c == '"' && (current.empty() || current.back() != '\\'))
+    if (c == '"')
     {
-      quoting = !quoting;
+      // Only quote if there were an even number of precedding escapes.
+      size_t first = current.find_last_not_of('\\') + 1;
+      size_t last = current.size();
+      if ((last - first) % 2 == 0)
+        quoting = !quoting;
       current.push_back(c);
       continue;
     }
