@@ -67,8 +67,6 @@ private:
                            const cmLocalGenerator *generator,
                            const cmSourceFile *source);
 
-  static std::vector<std::string> tokenize(const std::string flags);
-
   /** Dummy target generator for flags.  */
   class cmAndroidGradleTargetGenerator : public cmCommonTargetGenerator {
   public:

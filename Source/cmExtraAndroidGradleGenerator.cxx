@@ -219,77 +219,6 @@ Json::Value cmExtraAndroidGradleGenerator
   return NativeLibrary;
 }
 
-std::vector<std::string> cmExtraAndroidGradleGenerator
-::tokenize(const std::string flags) {
-  std::vector<std::string> tokens;
-  bool quoting = false;
-  bool escaping = false;
-  bool skipping = true;
-  std::string current;
-  for (char c : flags) {
-    if (skipping)
-    {
-      if (isspace(c))
-        continue;
-      else
-        skipping = false;
-    }
-
-#if defined(_WIN32)
-    if (c == '"')
-    {
-      // Only quote if there were an even number of precedding escapes.
-      size_t first = current.find_last_not_of('\\') + 1;
-      size_t last = current.size();
-      if ((last - first) % 2 == 0)
-        quoting = !quoting;
-      current.push_back(c);
-      continue;
-    }
-#else
-    if (escaping)
-    {
-      current.push_back(c);
-      escaping = false;
-      continue;
-    }
-
-    if (c == '\\')
-    {
-      escaping = true;
-      continue;
-    }
-
-    if (c == '"')
-    {
-      quoting = !quoting;
-      continue;
-    }
-#endif
-
-    if (!quoting && isspace(c))
-    {
-      skipping = true;
-      tokens.push_back(current);
-      current.clear();
-      continue;
-    }
-
-    // This works around the bug where a single '$' is emitted twice
-    // https://cmake.org/Bug/view.php?id=15952
-    // TODO: remove when bug is fixed upstream
-    if (c == '$' && !current.empty() && current.back() == c)
-      continue;
-
-    current.push_back(c);
-  }
-
-  if (!skipping)
-    tokens.push_back(current);
-
-  return tokens;
-}
-
 Json::Value cmExtraAndroidGradleGenerator
 ::ExportSource(const cmTarget *target,
                const cmLocalGenerator *generator,
@@ -307,11 +236,10 @@ Json::Value cmExtraAndroidGradleGenerator
     generator->Convert(workingDirectory, cmLocalGenerator::FULL);
   NativeSourceFile["workingDirectory"] = workingDirectory;
 
-  // flags
+  // flagsString
   cmGeneratorTarget *gt = this->GlobalGenerator->GetGeneratorTarget(target);
   cmAndroidGradleTargetGenerator tg(gt);
-  for (const auto &flag : tokenize(tg.ExportFlags(source)))
-    NativeSourceFile["flags"].append(flag);
+  NativeSourceFile["flags"] = tg.ExportFlags(source);
 
   return NativeSourceFile;
 }
