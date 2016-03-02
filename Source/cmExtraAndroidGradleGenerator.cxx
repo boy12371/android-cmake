@@ -56,13 +56,13 @@ void cmExtraAndroidGradleGenerator
   Json::Value NativeBuildConfig;
 
   // cleanCommand
-  std::vector<std::string> cleanCommand = {
-    makefile->GetRequiredDefinition("CMAKE_COMMAND"),
-    "--build", makefile->GetHomeOutputDirectory(),
-    "--target", "clean"
-  };
-  for (const auto &token : cleanCommand)
-    NativeBuildConfig["cleanCommand"].append(token);
+  const std::string cmakeCommand = cmSystemTools::ConvertToOutputPath(
+    makefile->GetRequiredDefinition("CMAKE_COMMAND"));
+  const std::string homeOutputDirectory = cmSystemTools::ConvertToOutputPath(
+    makefile->GetHomeOutputDirectory());
+  std::string cleanCommand = cmakeCommand +
+    " --build " + homeOutputDirectory + " --target " + "clean";
+  NativeBuildConfig["cleanCommands"].append(cleanCommand);
 
   // toolchains
   Json::Value toolchains;
@@ -176,13 +176,13 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // buildCommand
   const cmMakefile *makefile = generator->GetMakefile();
-  std::vector<std::string> buildCommand = {
-    makefile->GetRequiredDefinition("CMAKE_COMMAND"),
-    "--build", makefile->GetHomeOutputDirectory(),
-    "--target", target->GetName()
-  };
-  for (const auto &token : buildCommand)
-    NativeLibrary["buildCommand"].append(token);
+  const std::string cmakeCommand = cmSystemTools::ConvertToOutputPath(
+    makefile->GetRequiredDefinition("CMAKE_COMMAND"));
+  const std::string homeOutputDirectory = cmSystemTools::ConvertToOutputPath(
+    makefile->GetHomeOutputDirectory());
+  std::string buildCommand = cmakeCommand +
+    " --build " + homeOutputDirectory + " --target " + target->GetName();
+  NativeLibrary["buildCommand"] = buildCommand;
 
   // buildType
   if (!config.empty())
