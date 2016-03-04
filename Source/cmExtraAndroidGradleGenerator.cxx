@@ -186,7 +186,7 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // buildType
   if (!config.empty())
-    NativeLibrary["buildType"] = config;
+    NativeLibrary["buildType"] = cmSystemTools::LowerCase(config);
 
   // artifactName
   NativeLibrary["artifactName"] = target->GetName();
