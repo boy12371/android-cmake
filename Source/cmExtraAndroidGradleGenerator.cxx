@@ -46,7 +46,7 @@ void cmExtraAndroidGradleGenerator
 
   cmMakefile *makefile = generators[0]->GetMakefile();
 
-  std::string output = makefile->GetCurrentBinaryDirectory();
+  std::string output = makefile->GetHomeOutputDirectory();
   output += "/android_gradle_build.json";
 
   cmGeneratedFileStream fileStream{output.c_str()};
@@ -230,8 +230,11 @@ Json::Value cmExtraAndroidGradleGenerator
   NativeSourceFile["src"] = source->GetFullPath();
 
   // workingDirectory
-  std::string workingDirectory =
-    generator->GetMakefile()->GetCurrentBinaryDirectory();
+  std::string workingDirectory;
+  if (this->GlobalGenerator->GetName() == "Ninja")
+    workingDirectory = generator->GetMakefile()->GetHomeOutputDirectory();
+  else
+    workingDirectory = generator->GetMakefile()->GetCurrentBinaryDirectory();
   workingDirectory =
     generator->Convert(workingDirectory, cmLocalGenerator::FULL);
   NativeSourceFile["workingDirectory"] = workingDirectory;
