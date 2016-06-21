@@ -110,7 +110,7 @@ void cmExtraAndroidGradleGenerator
               library += '-' + config;
 
             const std::string abi =
-              makefile->GetSafeDefinition("ANDROID_ABI");
+              makefile->GetSafeDefinition("CMAKE_ANDROID_ARCH_ABI");
 
             if (!abi.empty())
               library += '-' + abi;
