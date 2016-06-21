@@ -14,7 +14,6 @@
 
 #include "cmGlobalVisualStudio71Generator.h"
 
-
 /** \class cmGlobalVisualStudio8Generator
  * \brief Write a Unix makefiles.
  *
@@ -24,17 +23,17 @@ class cmGlobalVisualStudio8Generator : public cmGlobalVisualStudio71Generator
 {
 public:
   cmGlobalVisualStudio8Generator(cmake* cm, const std::string& name,
-    const std::string& platformName);
+                                 const std::string& platformName);
   static cmGlobalGeneratorFactory* NewFactory();
 
   ///! Get the name for the generator.
-  virtual std::string GetName() const {return this->Name;}
+  virtual std::string GetName() const { return this->Name; }
 
   /** Get the documentation entry for this generator.  */
   static void GetDocumentation(cmDocumentationEntry& entry);
 
-  virtual void EnableLanguage(std::vector<std::string>const& languages,
-                              cmMakefile *, bool optional);
+  virtual void EnableLanguage(std::vector<std::string> const& languages,
+                              cmMakefile*, bool optional);
   virtual void AddPlatformDefinitions(cmMakefile* mf);
 
   virtual bool SetGeneratorPlatform(std::string const& p, cmMakefile* mf);
@@ -60,14 +59,19 @@ public:
 
   /** Return true if the target project file should have the option
       LinkLibraryDependencies and link to .sln dependencies. */
-  virtual bool NeedLinkLibraryDependencies(cmTarget& target);
+  virtual bool NeedLinkLibraryDependencies(cmGeneratorTarget* target);
 
   /** Return true if building for Windows CE */
-  virtual bool TargetsWindowsCE() const {
-    return !this->WindowsCEVersion.empty(); }
+  virtual bool TargetsWindowsCE() const
+  {
+    return !this->WindowsCEVersion.empty();
+  }
+
+  /** Is the installed VS an Express edition?  */
+  bool IsExpressEdition() const { return this->ExpressEdition; }
 
 protected:
-  virtual bool Compute();
+  virtual void AddExtraIDETargets();
   virtual const char* GetIDEVersion() { return "8.0"; }
 
   virtual std::string FindDevEnvCommand();
@@ -77,24 +81,27 @@ protected:
   bool AddCheckTarget();
 
   /** Return true if the configuration needs to be deployed */
-  virtual bool NeedsDeploy(cmTarget::TargetType type) const;
+  virtual bool NeedsDeploy(cmState::TargetType type) const;
 
   static cmIDEFlagTable const* GetExtraFlagTableVS8();
   virtual void WriteSLNHeader(std::ostream& fout);
   virtual void WriteSolutionConfigurations(
     std::ostream& fout, std::vector<std::string> const& configs);
   virtual void WriteProjectConfigurations(
-    std::ostream& fout, const std::string& name, cmTarget::TargetType type,
+    std::ostream& fout, const std::string& name, cmState::TargetType type,
     std::vector<std::string> const& configs,
     const std::set<std::string>& configsPartOfDefaultBuild,
     const std::string& platformMapping = "");
   virtual bool ComputeTargetDepends();
-  virtual void WriteProjectDepends(std::ostream& fout,
-                                   const std::string& name,
-                                   const char* path, cmTarget const& t);
+  virtual void WriteProjectDepends(std::ostream& fout, const std::string& name,
+                                   const char* path,
+                                   const cmGeneratorTarget* t);
+
+  bool UseFolderProperty();
 
   std::string Name;
   std::string WindowsCEVersion;
+  bool ExpressEdition;
 
 private:
   class Factory;

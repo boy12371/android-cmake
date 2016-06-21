@@ -95,11 +95,11 @@ void cmExtraAndroidGradleGenerator
       const auto &target = pair.second;
       switch(target.GetType())
       {
-        case cmTarget::EXECUTABLE:
-        case cmTarget::STATIC_LIBRARY:
-        case cmTarget::SHARED_LIBRARY:
-        case cmTarget::MODULE_LIBRARY:
-        case cmTarget::OBJECT_LIBRARY:
+        case cmState::EXECUTABLE:
+        case cmState::STATIC_LIBRARY:
+        case cmState::SHARED_LIBRARY:
+        case cmState::MODULE_LIBRARY:
+        case cmState::OBJECT_LIBRARY:
           {
             std::string library = name;
 
@@ -156,7 +156,9 @@ std::set<std::string> cmExtraAndroidGradleGenerator
   const std::string config = makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
 
   std::vector<cmSourceFile *> sources;
-  target->GetSourceFiles(sources, config);
+  cmGeneratorTarget *gt =
+    this->GlobalGenerator->FindGeneratorTarget(target->GetName());
+  gt->GetSourceFiles(sources, config);
 
   for (const auto &source : sources)
     if (language == source->GetLanguage())
@@ -196,8 +198,9 @@ Json::Value cmExtraAndroidGradleGenerator
     NativeLibrary["abi"] = abi;
 
   // output
-  if (target->GetType() != cmTarget::OBJECT_LIBRARY) {
-    cmGeneratorTarget *gt = this->GlobalGenerator->GetGeneratorTarget(target);
+  cmGeneratorTarget *gt =
+    this->GlobalGenerator->FindGeneratorTarget(target->GetName());
+  if (target->GetType() != cmState::OBJECT_LIBRARY) {
     const std::string output = gt->GetLocation(config);
     if (!output.empty())
       NativeLibrary["output"] = output;
@@ -208,7 +211,7 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // files
   std::vector<cmSourceFile *> sources;
-  target->GetSourceFiles(sources, config);
+  gt->GetSourceFiles(sources, config);
   for (const auto &source : sources)
   {
     const std::string language = source->GetLanguage();
@@ -240,7 +243,8 @@ Json::Value cmExtraAndroidGradleGenerator
   NativeSourceFile["workingDirectory"] = workingDirectory;
 
   // flagsString
-  cmGeneratorTarget *gt = this->GlobalGenerator->GetGeneratorTarget(target);
+  cmGeneratorTarget *gt =
+    this->GlobalGenerator->FindGeneratorTarget(target->GetName());
   cmAndroidGradleTargetGenerator tg(gt);
   NativeSourceFile["flags"] = tg.ExportFlags(source);
 
@@ -300,7 +304,7 @@ std::string cmExtraAndroidGradleGenerator::cmAndroidGradleTargetGenerator
 
   cmLocalGenerator::RuleVariables vars;
   vars.RuleLauncher = "RULE_LAUNCH_COMPILE";
-  vars.CMTarget = Target;
+  vars.CMTarget = this->GeneratorTarget;
   vars.Language = language.c_str();
   vars.Flags = flags.c_str();
   vars.Defines = definesString.c_str();

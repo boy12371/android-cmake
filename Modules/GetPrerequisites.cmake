@@ -500,6 +500,7 @@ function(gp_resolved_file_type original_file file exepath dirs type_var)
   if(NOT IS_ABSOLUTE "${original_file}")
     message(STATUS "warning: gp_resolved_file_type expects absolute full path for first arg original_file")
   endif()
+  get_filename_component(original_file "${original_file}" ABSOLUTE) # canonicalize path
 
   set(is_embedded 0)
   set(is_local 0)
@@ -515,6 +516,7 @@ function(gp_resolved_file_type original_file file exepath dirs type_var)
     if(NOT IS_ABSOLUTE "${file}")
       gp_resolve_item("${original_file}" "${file}" "${exepath}" "${dirs}" resolved_file "${rpaths}")
     endif()
+    get_filename_component(resolved_file "${resolved_file}" ABSOLUTE) # canonicalize path
 
     string(TOLOWER "${original_file}" original_lower)
     string(TOLOWER "${resolved_file}" lower)
@@ -538,7 +540,7 @@ function(gp_resolved_file_type original_file file exepath dirs type_var)
       string(TOLOWER "$ENV{windir}" windir)
       file(TO_CMAKE_PATH "${windir}" windir)
 
-      if(lower MATCHES "^(${sysroot}/sys(tem|wow)|${windir}/sys(tem|wow)|(.*/)*msvc[^/]+dll)")
+      if(lower MATCHES "^(api-ms-win-|${sysroot}/sys(tem|wow)|${windir}/sys(tem|wow)|(.*/)*msvc[^/]+dll)")
         set(is_system 1)
       endif()
 
@@ -566,7 +568,7 @@ function(gp_resolved_file_type original_file file exepath dirs type_var)
           string(TOLOWER "${env_windir}" windir)
           string(TOLOWER "${env_sysdir}" sysroot)
 
-          if(lower MATCHES "^(${sysroot}/sys(tem|wow)|${windir}/sys(tem|wow)|(.*/)*msvc[^/]+dll)")
+          if(lower MATCHES "^(api-ms-win-|${sysroot}/sys(tem|wow)|${windir}/sys(tem|wow)|(.*/)*msvc[^/]+dll)")
             set(is_system 1)
           endif()
         endif()
@@ -661,10 +663,28 @@ function(get_prerequisites target prerequisites_var exclude_system recurse exepa
   endif()
 
   set(gp_cmd_paths ${gp_cmd_paths}
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\14.0;InstallDir]/../../VC/bin"
+    "$ENV{VS140COMNTOOLS}/../../VC/bin"
+    "C:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/bin"
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\12.0;InstallDir]/../../VC/bin"
+    "$ENV{VS120COMNTOOLS}/../../VC/bin"
+    "C:/Program Files (x86)/Microsoft Visual Studio 12.0/VC/bin"
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\11.0;InstallDir]/../../VC/bin"
+    "$ENV{VS110COMNTOOLS}/../../VC/bin"
+    "C:/Program Files (x86)/Microsoft Visual Studio 11.0/VC/bin"
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\10.0;InstallDir]/../../VC/bin"
+    "$ENV{VS100COMNTOOLS}/../../VC/bin"
+    "C:/Program Files (x86)/Microsoft Visual Studio 10.0/VC/bin"
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\9.0;InstallDir]/../../VC/bin"
+    "$ENV{VS90COMNTOOLS}/../../VC/bin"
     "C:/Program Files/Microsoft Visual Studio 9.0/VC/bin"
     "C:/Program Files (x86)/Microsoft Visual Studio 9.0/VC/bin"
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\8.0;InstallDir]/../../VC/bin"
+    "$ENV{VS80COMNTOOLS}/../../VC/bin"
     "C:/Program Files/Microsoft Visual Studio 8/VC/BIN"
     "C:/Program Files (x86)/Microsoft Visual Studio 8/VC/BIN"
+    "[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VisualStudio\\7.1;InstallDir]/../../VC7/bin"
+    "$ENV{VS71COMNTOOLS}/../../VC7/bin"
     "C:/Program Files/Microsoft Visual Studio .NET 2003/VC7/BIN"
     "C:/Program Files (x86)/Microsoft Visual Studio .NET 2003/VC7/BIN"
     "/usr/local/bin"

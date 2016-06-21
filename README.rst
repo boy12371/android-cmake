@@ -46,7 +46,7 @@ UNIX/Mac OSX/MinGW/MSYS/Cygwin
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You need to have a compiler and a make installed.
-Run the ``bootstrap`` script you find the in the source directory of CMake.
+Run the ``bootstrap`` script you find in the source directory of CMake.
 You can use the ``--help`` option to see the supported options.
 You may use the ``--prefix=<install_prefix>`` option to specify a custom
 installation directory for CMake. You can run the ``bootstrap`` script from
@@ -89,7 +89,7 @@ If you have found a bug:
 3. Finally, if the issue is not resolved by the above steps, open
    an entry in the `CMake Issue Tracker`_.
 
-.. _`CMake Issue Tracker`: https://cmake.org/Bug
+.. _`CMake Issue Tracker`: https://gitlab.kitware.com/cmake/cmake/issues
 
 Contributing
 ============

@@ -138,9 +138,10 @@ a path on the host to install to. The :variable:`CMAKE_INSTALL_PREFIX` is always
 the runtime installation location, even when cross-compiling.
 
 The :variable:`CMAKE_<LANG>_COMPILER` variables may be set to full paths, or to
-names of compilers to search for in standard locations. In cases where CMake does
-not have enough information to extract information from the compiler, the
-:module:`CMakeForceCompiler` module can be used to bypass some of the checks.
+names of compilers to search for in standard locations.   For toolchains that
+do not support linking binaries without custom flags or scripts one may set
+the :variable:`CMAKE_TRY_COMPILE_TARGET_TYPE` variable to ``STATIC_LIBRARY``
+to tell CMake not to try to link executables during its checks.
 
 CMake ``find_*`` commands will look in the sysroot, and the :variable:`CMAKE_FIND_ROOT_PATH`
 entries by default in all cases, as well as looking in the host system root prefix.
@@ -150,6 +151,36 @@ artifacts. Generally, includes, libraries and packages should be found in the
 target system prefixes, whereas executables which must be run as part of the build
 should be found only on the host and not on the target. This is the purpose of
 the ``CMAKE_FIND_ROOT_PATH_MODE_*`` variables.
+
+.. _`Cray Cross-Compile`:
+
+Cross Compiling for the Cray Linux Environment
+----------------------------------------------
+
+Cross compiling for compute nodes in the Cray Linux Environment can be done
+without needing a separate toolchain file.  Specifying
+``-DCMAKE_SYSTEM_NAME=CrayLinuxEnvironment`` on the CMake command line will
+ensure that the appropriate build settings and search paths are configured.
+The platform will pull its configuration from the current environment
+variables and will configure a project to use the compiler wrappers from the
+Cray Programming Environment's ``PrgEnv-*`` modules if present and loaded.
+
+The default configuration of the Cray Programming Environment is to only
+support static libraries.  This can be overridden and shared libraries
+enabled by setting the ``CRAYPE_LINK_TYPE`` environment variable to
+``dynamic``.
+
+Running CMake without specifying :variable:`CMAKE_SYSTEM_NAME` will
+run the configure step in host mode assuming a standard Linux environment.
+If not overridden, the ``PrgEnv-*`` compiler wrappers will end up getting used,
+which if targeting the either the login node or compute node, is likely not the
+desired behavior.  The exception to this would be if you are building directly
+on a NID instead of cross-compiling from a login node. If trying to build
+software for a login node, you will need to either first unload the
+currently loaded ``PrgEnv-*`` module or explicitly tell CMake to use the
+system compilers in ``/usr/bin`` instead of the Cray wrappers.  If instead
+targeting a compute node is desired, just specify the
+:variable:`CMAKE_SYSTEM_NAME` as mentioned above.
 
 Cross Compiling using Clang
 ---------------------------

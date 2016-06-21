@@ -11,9 +11,9 @@
 ============================================================================*/
 #ifndef cmVisualStudioTargetGenerator_h
 #define cmVisualStudioTargetGenerator_h
+
 #include "cmStandardIncludes.h"
 
-class cmTarget;
 class cmMakefile;
 class cmGeneratorTarget;
 class cmGeneratedFileStream;
@@ -29,19 +29,14 @@ struct cmIDEFlagTable;
 class cmVisualStudio10TargetGenerator
 {
 public:
-  cmVisualStudio10TargetGenerator(cmTarget* target,
+  cmVisualStudio10TargetGenerator(cmGeneratorTarget* target,
                                   cmGlobalVisualStudio10Generator* gg);
   ~cmVisualStudio10TargetGenerator();
   void Generate();
   // used by cmVisualStudioGeneratorOptions
-  void WritePlatformConfigTag(
-    const char* tag,
-    const std::string& config,
-    int indentLevel,
-    const char* attribute = 0,
-    const char* end = 0,
-    std::ostream* strm = 0
-    );
+  void WritePlatformConfigTag(const char* tag, const std::string& config,
+                              int indentLevel, const char* attribute = 0,
+                              const char* end = 0, std::ostream* strm = 0);
 
 private:
   struct ToolSource
@@ -49,7 +44,9 @@ private:
     cmSourceFile const* SourceFile;
     bool RelativePath;
   };
-  struct ToolSources: public std::vector<ToolSource> {};
+  struct ToolSources : public std::vector<ToolSource>
+  {
+  };
 
   std::string ConvertPath(std::string const& path, bool forceRelative);
   void ConvertToWindowsSlash(std::string& s);
@@ -91,11 +88,11 @@ private:
   bool ComputeClOptions();
   bool ComputeClOptions(std::string const& configName);
   void WriteClOptions(std::string const& config,
-                      std::vector<std::string> const & includes);
+                      std::vector<std::string> const& includes);
   bool ComputeRcOptions();
   bool ComputeRcOptions(std::string const& config);
   void WriteRCOptions(std::string const& config,
-                      std::vector<std::string> const & includes);
+                      std::vector<std::string> const& includes);
   bool ComputeMasmOptions();
   bool ComputeMasmOptions(std::string const& config);
   void WriteMasmOptions(std::string const& config,
@@ -104,11 +101,11 @@ private:
   bool ComputeLinkOptions(std::string const& config);
   void WriteLinkOptions(std::string const& config);
   void WriteMidlOptions(std::string const& config,
-                        std::vector<std::string> const & includes);
+                        std::vector<std::string> const& includes);
   void WriteAntBuildOptions(std::string const& config);
   void OutputLinkIncremental(std::string const& configName);
   void WriteCustomRule(cmSourceFile const* source,
-                       cmCustomCommand const & command);
+                       cmCustomCommand const& command);
   void WriteCustomCommands();
   void WriteCustomCommand(cmSourceFile const* sf);
   void WriteGroups();
@@ -124,7 +121,7 @@ private:
                   std::vector<cmCustomCommand> const& commands,
                   std::string const& configName);
   void WriteGroupSources(const char* name, ToolSources const& sources,
-                         std::vector<cmSourceGroup>& );
+                         std::vector<cmSourceGroup>&);
   void AddMissingSourceGroups(std::set<cmSourceGroup*>& groupsUsed,
                               const std::vector<cmSourceGroup>& allGroups);
   bool IsResxHeader(const std::string& headerFile);
@@ -148,7 +145,6 @@ private:
   OptionsMap LinkOptions;
   std::string PathToVcxproj;
   std::vector<std::string> Configurations;
-  cmTarget* Target;
   cmGeneratorTarget* GeneratorTarget;
   cmMakefile* Makefile;
   std::string Platform;
@@ -156,7 +152,7 @@ private:
   std::string Name;
   bool MSTools;
   bool NsightTegra;
-  int  NsightTegraVersion[4];
+  int NsightTegraVersion[4];
   bool TargetCompileAsWinRT;
   cmGlobalVisualStudio10Generator* GlobalGenerator;
   cmGeneratedFileStream* BuildFileStream;

@@ -188,18 +188,6 @@ set(wxWidgets_LIBRARIES    "")
 set(wxWidgets_LIBRARY_DIRS "")
 set(wxWidgets_CXX_FLAGS    "")
 
-# Using SYSTEM with INCLUDE_DIRECTORIES in conjunction with wxWidgets on
-# the Mac produces compiler errors. Set wxWidgets_INCLUDE_DIRS_NO_SYSTEM
-# to prevent UsewxWidgets.cmake from using SYSTEM.
-#
-# See cmake mailing list discussions for more info:
-#   https://cmake.org/pipermail/cmake/2008-April/021115.html
-#   https://cmake.org/pipermail/cmake/2008-April/021146.html
-#
-if(APPLE OR CMAKE_CXX_PLATFORM_ID MATCHES "OpenBSD")
-  set(wxWidgets_INCLUDE_DIRS_NO_SYSTEM 1)
-endif()
-
 # DEPRECATED: This is a patch to support the DEPRECATED use of
 # wxWidgets_USE_LIBS.
 #
@@ -845,6 +833,36 @@ else()
         set(wxWidgets_FOUND FALSE)
         DBG_MSG("${wxWidgets_CONFIG_EXECUTABLE} --libs ${wxWidgets_FIND_COMPONENTS} FAILED with RET=${RET}")
       endif()
+    endif()
+
+    # When using wx-config in MSYS, the include paths are UNIX style paths which may or may
+    # not work correctly depending on you MSYS/MinGW configuration.  CMake expects native
+    # paths internally.
+    if(wxWidgets_FOUND AND MSYS)
+      find_program(_cygpath_exe cygpath ONLY_CMAKE_FIND_ROOT_PATH)
+      DBG_MSG_V("_cygpath_exe:  ${_cygpath_exe}")
+      if(_cygpath_exe)
+        set(_tmp_path "")
+        foreach(_path ${wxWidgets_INCLUDE_DIRS})
+          execute_process(
+            COMMAND cygpath -w ${_path}
+            OUTPUT_VARIABLE _native_path
+            RESULT_VARIABLE _retv
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            )
+          if(_retv EQUAL 0)
+            file(TO_CMAKE_PATH ${_native_path} _native_path)
+            DBG_MSG_V("Path ${_path} converted to ${_native_path}")
+            set(_tmp_path "${_tmp_path} ${_native_path}")
+          endif()
+        endforeach()
+        DBG_MSG("Setting wxWidgets_INCLUDE_DIRS = ${_tmp_path}")
+        set(wxWidgets_INCLUDE_DIRS ${_tmp_path})
+        separate_arguments(wxWidgets_INCLUDE_DIRS)
+        list(REMOVE_ITEM wxWidgets_INCLUDE_DIRS "")
+      endif()
+      unset(_cygpath_exe CACHE)
     endif()
 
 #=====================================================================

@@ -119,7 +119,8 @@
 #
 # .. variable:: CPACK_WIX_PATCH_FILE
 #
-#  Optional XML file with fragments to be inserted into generated WiX sources
+#  Optional list of XML files with fragments to be inserted into
+#  generated WiX sources
 #
 #  This optional variable can be used to specify an XML file that the
 #  WiX generator will use to inject fragments into its generated
@@ -233,7 +234,7 @@
 #  * ARPCOMMENTS - Comments
 #  * ARPHELPLINK - Help and support information URL
 #  * ARPURLINFOABOUT - General information URL
-#  * URLUPDATEINFO - Update information URL
+#  * ARPURLUPDATEINFO - Update information URL
 #  * ARPHELPTELEPHONE - Help and support telephone number
 #  * ARPSIZE - Size (in kilobytes) of the application
 
@@ -255,14 +256,14 @@ if(NOT CPACK_WIX_ROOT)
 endif()
 
 find_program(CPACK_WIX_CANDLE_EXECUTABLE candle
-  PATHS "${CPACK_WIX_ROOT}/bin")
+  PATHS "${CPACK_WIX_ROOT}" PATH_SUFFIXES "bin")
 
 if(NOT CPACK_WIX_CANDLE_EXECUTABLE)
   message(FATAL_ERROR "Could not find the WiX candle executable.")
 endif()
 
 find_program(CPACK_WIX_LIGHT_EXECUTABLE light
-  PATHS "${CPACK_WIX_ROOT}/bin")
+  PATHS "${CPACK_WIX_ROOT}" PATH_SUFFIXES "bin")
 
 if(NOT CPACK_WIX_LIGHT_EXECUTABLE)
   message(FATAL_ERROR "Could not find the WiX light executable.")

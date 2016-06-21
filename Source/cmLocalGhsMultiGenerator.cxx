@@ -10,11 +10,12 @@
   See the License for more information.
 ============================================================================*/
 #include "cmLocalGhsMultiGenerator.h"
-#include "cmGlobalGhsMultiGenerator.h"
-#include "cmGeneratorTarget.h"
-#include "cmMakefile.h"
-#include "cmGhsMultiTargetGenerator.h"
+
 #include "cmGeneratedFileStream.h"
+#include "cmGeneratorTarget.h"
+#include "cmGhsMultiTargetGenerator.h"
+#include "cmGlobalGhsMultiGenerator.h"
+#include "cmMakefile.h"
 
 cmLocalGhsMultiGenerator::cmLocalGhsMultiGenerator(cmGlobalGenerator* gg,
                                                    cmMakefile* mf)
@@ -22,21 +23,20 @@ cmLocalGhsMultiGenerator::cmLocalGhsMultiGenerator(cmGlobalGenerator* gg,
 {
 }
 
-cmLocalGhsMultiGenerator::~cmLocalGhsMultiGenerator() {}
+cmLocalGhsMultiGenerator::~cmLocalGhsMultiGenerator()
+{
+}
 
 void cmLocalGhsMultiGenerator::Generate()
 {
-  cmGeneratorTargetsType tgts = this->GetMakefile()->GetGeneratorTargets();
+  std::vector<cmGeneratorTarget*> tgts = this->GetGeneratorTargets();
 
-  for (cmGeneratorTargetsType::iterator l = tgts.begin(); l != tgts.end();
-       ++l)
-    {
-    if (l->second->Target->GetType() == cmTarget::INTERFACE_LIBRARY
-        || l->second->Target->IsImported())
-      {
+  for (std::vector<cmGeneratorTarget*>::iterator l = tgts.begin();
+       l != tgts.end(); ++l) {
+    if ((*l)->GetType() == cmState::INTERFACE_LIBRARY) {
       continue;
-      }
-    cmGhsMultiTargetGenerator tg(l->second);
-    tg.Generate();
     }
+    cmGhsMultiTargetGenerator tg(*l);
+    tg.Generate();
+  }
 }

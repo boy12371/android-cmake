@@ -269,8 +269,7 @@ if(BUILD_TESTING)
     set(TEST_RESOURCES TRUE)
   endif()
   # for borland and watcom there is no resource support
-  if("${CMAKE_GENERATOR}" MATCHES "WMake" OR
-      "${CMAKE_GENERATOR}" MATCHES "Borland")
+  if(WATCOM OR BORLAND)
     set(TEST_RESOURCES FALSE)
   endif()
   if(TEST_RESOURCES)
@@ -610,8 +609,8 @@ if(BUILD_TESTING)
   endif()
 
   # test for correct sub-project generation
-  # not implemented in VS 6, VS 7.0, Xcode, or Ninja
-  if(NOT CMAKE_GENERATOR MATCHES "Visual Studio [67]$|Xcode|Ninja")
+  # not implemented in VS 7.0, Xcode, or Ninja
+  if(NOT CMAKE_GENERATOR MATCHES "Visual Studio 7$|Xcode|Ninja")
     # run cmake and configure all of SubProject
     # but only build the independent executable car
     add_test(SubProject ${CMAKE_CTEST_COMMAND}
@@ -670,14 +669,17 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     endif()
   endmacro()
   if(CMAKE_BUILD_NIGHTLY_RELEASES)
-    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyWindows
-      dash2win64_release.cmake)
-    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyMac
-      dashmacmini2_release.cmake)
-    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyMac64
-      dashmacmini5_release.cmake)
-    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyLinux
-      magrathea_release.cmake)
+    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyWin32
+      win32_release.cmake)
+    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyWin64
+      win64_release.cmake)
+    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyOSX
+      osx_release.cmake)
+    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyLinux32
+      linux32_release.cmake)
+    ADD_NIGHTLY_BUILD_TEST(CMakeNightlyLinux64
+      linux64_release.cmake)
+    set_property(TEST CMakeNightlyWin64 PROPERTY DEPENDS CMakeNightlyWin32)
   endif()
 
   # add tests with more complex invocations
@@ -1018,9 +1020,11 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
       set(DEB_CONFIGURATIONS_TO_TEST "components-lintian-dpkgdeb-checks"
                                      "components-description1"
                                      "components-description2"
+                                     "components-source"
                                      "components-shlibdeps1"
                                      "components-depend1"
-                                     "components-depend2")
+                                     "components-depend2"
+                                     "compression")
       set(CPackGen "DEB")
       set(CPackRun_CPackGen "-DCPackGen=${CPackGen}")
 
@@ -1339,15 +1343,44 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     endif()
   endif()
 
+  if(CMake_TEST_FindBoost)
+    add_subdirectory(FindBoost)
+  endif()
+
   if(CMake_TEST_FindGSL)
     add_subdirectory(FindGSL)
   endif()
+
+  if(CMake_TEST_FindGTest)
+    add_subdirectory(FindGTest)
+  endif()
+
   if(CMake_TEST_FindJsonCpp)
     add_subdirectory(FindJsonCpp)
   endif()
 
+  if(CMake_TEST_FindLTTngUST)
+    add_subdirectory(FindLTTngUST)
+  endif()
+
   if(CMake_TEST_FindOpenSSL)
     add_subdirectory(FindOpenSSL)
+  endif()
+
+  if(CMake_TEST_FindPNG)
+    add_subdirectory(FindPNG)
+  endif()
+
+  if(CMake_TEST_FindTIFF)
+    add_subdirectory(FindTIFF)
+  endif()
+
+  if(CMake_TEST_FindXalanC)
+    add_subdirectory(FindXalanC)
+  endif()
+
+  if(CMake_TEST_FindXercesC)
+    add_subdirectory(FindXercesC)
   endif()
 
   add_subdirectory(FindThreads)
@@ -1603,7 +1636,7 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
 
   if(CMake_TEST_XCODE_VERSION AND NOT CMake_TEST_XCODE_VERSION VERSION_LESS 5
      AND OSX_VERSION MATCHES "^([0-9]+\\.[0-9]+)")
-    set(XCTest_BUILD_OPTIONS -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_MATCH_1})
+    set(XCTest_BUILD_OPTIONS -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_MATCH_1} -DCMAKE_OSX_SYSROOT=macosx)
     ADD_TEST_MACRO(XCTest ${CMAKE_CTEST_COMMAND} -C $<CONFIGURATION> -V)
   endif()
 
@@ -1699,7 +1732,9 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
   if(MSVC)
     ADD_TEST_MACRO(ForceInclude foo)
     ADD_TEST_MACRO(PDBDirectoryAndName myexe)
-    ADD_TEST_MACRO(PrecompiledHeader foo)
+    if(NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
+      ADD_TEST_MACRO(PrecompiledHeader foo)
+    endif()
   endif()
   if(MSVC OR
       "${CMAKE_GENERATOR}" MATCHES "(MSYS|MinGW) Makefiles")
@@ -1828,7 +1863,7 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
   endif()
 
   if(MSVC AND NOT MSVC_VERSION LESS 1310
-     AND NOT CMAKE_GENERATOR MATCHES "Visual Studio [67]( |$)"
+     AND NOT CMAKE_GENERATOR MATCHES "Visual Studio 7( |$)"
      AND (NOT CMAKE_GENERATOR MATCHES "Visual Studio [89]( |$)"
           OR CMAKE_SIZEOF_VOID_P EQUAL 4)
       )
@@ -1840,7 +1875,7 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
       ADD_TEST_MACRO(SBCS SBCS)
     endif()
 
-    if(NOT "${CMAKE_GENERATOR}" MATCHES "Visual Studio [6789]( |$)"
+    if(NOT "${CMAKE_GENERATOR}" MATCHES "Visual Studio [789]( |$)"
         AND NOT CMAKE_GENERATOR_TOOLSET)
       ADD_TEST_MACRO(VSWindowsFormsResx VSWindowsFormsResx)
     endif()
@@ -1869,7 +1904,6 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
 
     if(CMake_TEST_DEVENV)
       # The test (and tested property) works with .sln files, so it's skipped when:
-      # * Using VS6, which doesn't use .sln files
       # * cmake --build is set up to use MSBuild, since the MSBuild invocation does not use the .sln file
       set(_last_test "")
       foreach(config ${CMAKE_CONFIGURATION_TYPES})
@@ -2054,6 +2088,17 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     endmacro ()
     add_test_GhsMulti("arm_integrity_simarm" "arm_integrity.tgt" "simarm")
     add_test_GhsMulti("arm64_integrity_simarm" "arm64_integrity.tgt" "simarm")
+    add_test(NAME GhsMulti.duplicate_source_filenames
+        COMMAND ${CMAKE_CTEST_COMMAND}
+        --build-and-test
+        "${CMake_SOURCE_DIR}/Tests/GhsMultiDuplicateSourceFilenames"
+        "${CMake_BINARY_DIR}/Tests/GhsMultiDuplicateSourceFilenames"
+        --build-generator "Green Hills MULTI"
+        --build-project ReturnNum
+        --build-config $<CONFIGURATION>
+        --build-options -DGHS_PRIMARY_TARGET="arm_integrity.tgt"
+        -DGHS_BSP_NAME="simarm"
+        )
   endif ()
 
   if(tegra AND NOT "${CMake_SOURCE_DIR};${CMake_BINARY_DIR}" MATCHES " ")
@@ -2527,6 +2572,7 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
   set_tests_properties(CTestCoberturaCoverage PROPERTIES
       PASS_REGULAR_EXPRESSION
       "Process file.*CoverageTest.java.*Total LOC:.*18.*Percentage Coverage: 72.22.*"
+      ENVIRONMENT COBERTURADIR=${CMake_BINARY_DIR}/Testing/CoberturaCoverage
       ENVIRONMENT COVFILE=)
 
 
@@ -2572,8 +2618,9 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
      "${CMake_BINARY_DIR}/Testing/DelphiCoverage/DartConfiguration.tcl")
   file(COPY "${CMake_SOURCE_DIR}/Tests/DelphiCoverage/src"
     DESTINATION "${CMake_BINARY_DIR}/Testing/DelphiCoverage")
-  file(COPY "${CMake_SOURCE_DIR}/Tests/DelphiCoverage/UTCovTest(UTCovTest.pas).html"
-    DESTINATION "${CMake_BINARY_DIR}/Testing/DelphiCoverage")
+  configure_file(
+    "${CMake_SOURCE_DIR}/Tests/DelphiCoverage/UTCovTest(UTCovTest.pas).html.in"
+    "${CMake_BINARY_DIR}/Testing/DelphiCoverage/UTCovTest(UTCovTest.pas).html")
   add_test(NAME CTestDelphiCoverage
     COMMAND cmake -E chdir
     ${CMake_BINARY_DIR}/Testing/DelphiCoverage

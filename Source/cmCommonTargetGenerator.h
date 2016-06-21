@@ -21,7 +21,6 @@ class cmGlobalCommonGenerator;
 class cmLocalCommonGenerator;
 class cmMakefile;
 class cmSourceFile;
-class cmTarget;
 
 /** \class cmCommonTargetGenerator
  * \brief Common infrastructure for Makefile and Ninja per-target generators
@@ -36,7 +35,6 @@ public:
   std::string const& GetConfigName() const;
 
 protected:
-
   // Add language feature flags.
   void AddFeatureFlags(std::string& flags, const std::string& lang);
 
@@ -49,14 +47,13 @@ protected:
 
   cmOutputConverter::RelativeRoot WorkingDirectory;
   cmGeneratorTarget* GeneratorTarget;
-  cmTarget* Target;
   cmMakefile* Makefile;
   cmLocalCommonGenerator* LocalGenerator;
   cmGlobalCommonGenerator* GlobalGenerator;
   std::string ConfigName;
 
   // The windows module definition source file (.def), if any.
-  std::string ModuleDefinitionFile;
+  cmSourceFile const* ModuleDefinitionFile;
 
   // Target-wide Fortran module output directory.
   bool FortranModuleDirectoryComputed;
@@ -67,10 +64,9 @@ protected:
   // Compute target-specific Fortran language flags.
   void AddFortranFlags(std::string& flags);
 
-  std::string Convert(std::string const& source,
-                      cmLocalGenerator::RelativeRoot relative,
-                      cmLocalGenerator::OutputFormat output =
-                      cmLocalGenerator::UNCHANGED);
+  std::string Convert(
+    std::string const& source, cmOutputConverter::RelativeRoot relative,
+    cmOutputConverter::OutputFormat output = cmOutputConverter::UNCHANGED);
 
   void AppendFortranFormatFlags(std::string& flags,
                                 cmSourceFile const& source);
@@ -81,10 +77,13 @@ protected:
   virtual void AddIncludeFlags(std::string& flags,
                                std::string const& lang) = 0;
 
+  void AppendOSXVerFlag(std::string& flags, const std::string& lang,
+                        const char* name, bool so);
+
   typedef std::map<std::string, std::string> ByLanguageMap;
-  std::string GetFlags(const std::string &l);
+  std::string GetFlags(const std::string& l);
   ByLanguageMap FlagsByLanguage;
-  std::string GetDefines(const std::string &l);
+  std::string GetDefines(const std::string& l);
   ByLanguageMap DefinesByLanguage;
   std::string GetIncludes(std::string const& l);
   ByLanguageMap IncludesByLanguage;

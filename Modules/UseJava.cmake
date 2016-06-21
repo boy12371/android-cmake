@@ -169,7 +169,7 @@
 #
 # ::
 #
-#    The add_jar() functions sets some target properties. You can get these
+#    The add_jar() function sets some target properties. You can get these
 #    properties with the
 #       get_property(TARGET <target_name> PROPERTY <propery_name>)
 #    command.
@@ -184,7 +184,7 @@
 #                       This is used by install_jni_symlink().
 #    JAR_FILE           The location of the jar file so that you can include
 #                       it.
-#    CLASS_DIR          The directory where the class files can be found. For
+#    CLASSDIR           The directory where the class files can be found. For
 #                       example to use them with javah.
 #
 # ::
@@ -324,7 +324,7 @@
 # that allow your Java and C code to interact.
 #
 # There are two main signatures for create_javah.  The first signature
-# returns generated files throught variable specified by GENERATED_FILES option:
+# returns generated files through variable specified by GENERATED_FILES option:
 #
 # ::
 #
@@ -389,7 +389,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/CMakeParseArguments.cmake)
 function (__java_copy_file src dest comment)
     add_custom_command(
         OUTPUT  ${dest}
-        COMMAND cmake -E copy_if_different
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ARGS    ${src}
                 ${dest}
         DEPENDS ${src}
@@ -444,7 +444,7 @@ function(add_jar _TARGET_NAME)
 
     if (_add_jar_MANIFEST)
         set(_MANIFEST_OPTION m)
-        set(_MANIFEST_VALUE ${_add_jar_MANIFEST})
+        get_filename_component (_MANIFEST_VALUE "${_add_jar_MANIFEST}" ABSOLUTE)
     endif ()
 
     if (LIBRARY_OUTPUT_PATH)
@@ -1212,7 +1212,7 @@ function (create_javah)
 
     set (_output_files)
     if (WIN32 AND NOT CYGWIN AND CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-      set(_classpath_sep ";")
+      set(_classpath_sep "$<SEMICOLON>")
     else ()
       set(_classpath_sep ":")
     endif()
@@ -1242,7 +1242,7 @@ function (create_javah)
         endif()
       endforeach()
       string (REPLACE ";" "${_classpath_sep}" _classpath "${_classpath}")
-      list (APPEND _javah_options -classpath ${_classpath})
+      list (APPEND _javah_options -classpath "${_classpath}")
     endif()
 
     if (_create_javah_OUTPUT_DIR)

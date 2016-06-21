@@ -301,8 +301,6 @@ set(SRCS
   cmLocalUnixMakefileGenerator3.cxx
   cmLocale.h
   ${MACH_SRCS}
-  cmMakeDepend.cxx
-  cmMakeDepend.h
   cmMakefile.cxx
   cmMakefile.h
   cmMakefileTargetGenerator.cxx
@@ -456,8 +454,6 @@ if (WIN32)
       cmGlobalNMakeMakefileGenerator.h
       cmGlobalJOMMakefileGenerator.cxx
       cmGlobalJOMMakefileGenerator.h
-      cmGlobalVisualStudio6Generator.cxx
-      cmGlobalVisualStudio6Generator.h
       cmGlobalVisualStudio71Generator.cxx
       cmGlobalVisualStudio71Generator.h
       cmGlobalVisualStudio7Generator.cxx
@@ -485,8 +481,6 @@ if (WIN32)
       cmIDEFlagTable.h
       cmIDEOptions.cxx
       cmIDEOptions.h
-      cmLocalVisualStudio6Generator.cxx
-      cmLocalVisualStudio6Generator.h
       cmLocalVisualStudio7Generator.cxx
       cmLocalVisualStudio7Generator.h
       cmLocalVisualStudioGenerator.cxx
@@ -550,6 +544,19 @@ foreach(v CURL_CA_BUNDLE CURL_CA_PATH)
   endif()
 endforeach()
 
+foreach(check
+    STAT_HAS_ST_MTIM
+    STAT_HAS_ST_MTIMESPEC
+    )
+  if(KWSYS_CXX_${check}_COMPILED) # abuse KWSys check cache entry
+    set(CMake_${check} 1)
+  else()
+    set(CMake_${check} 0)
+  endif()
+  set_property(SOURCE cmFileTimeComparison.cxx APPEND PROPERTY
+    COMPILE_DEFINITIONS CMake_${check}=${CMake_${check}})
+endforeach()
+
 # create a library used by the command line and the GUI
 add_library(CMakeLib ${SRCS})
 target_link_libraries(CMakeLib cmsys
@@ -557,6 +564,7 @@ target_link_libraries(CMakeLib cmsys
   ${CMAKE_TAR_LIBRARIES} ${CMAKE_COMPRESS_LIBRARIES}
   ${CMAKE_CURL_LIBRARIES}
   ${CMAKE_JSONCPP_LIBRARIES}
+  ${CMake_KWIML_LIBRARIES}
   )
 
 # On Apple we need CoreFoundation
@@ -656,6 +664,7 @@ set(CPACK_SRCS
   CPack/cmCPackNSISGenerator.cxx
   CPack/IFW/cmCPackIFWPackage.cxx
   CPack/IFW/cmCPackIFWInstaller.cxx
+  CPack/IFW/cmCPackIFWRepository.cxx
   CPack/IFW/cmCPackIFWGenerator.cxx
   CPack/cmCPackSTGZGenerator.cxx
   CPack/cmCPackTGZGenerator.cxx
@@ -717,6 +726,22 @@ endif()
 # Build CPackLib
 add_library(CPackLib ${CPACK_SRCS})
 target_link_libraries(CPackLib CMakeLib)
+if(APPLE)
+  # Some compilers produce errors in the CoreServices framework headers.
+  # Ideally such errors should be fixed by either the compiler vendor
+  # or the framework source, but we try to workaround it and build anyway.
+  # If it does not work, build with reduced functionality and warn.
+  check_include_file("CoreServices/CoreServices.h" HAVE_CoreServices)
+  if(HAVE_CoreServices)
+    set_property(SOURCE CPack/cmCPackDragNDropGenerator.cxx PROPERTY COMPILE_DEFINITIONS HAVE_CoreServices)
+    target_link_libraries(CPackLib "-framework CoreServices")
+  else()
+    message(WARNING "This compiler does not appear to support\n"
+      "  #include <CoreServices/CoreServices.h>\n"
+      "Some CPack functionality may be limited.\n"
+      "See CMakeFiles/CMakeError.log for details of the failure.")
+  endif()
+endif()
 
 if(APPLE)
   add_executable(cmakexbuild cmakexbuild.cxx)
