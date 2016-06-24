@@ -156,7 +156,7 @@ std::set<std::string> cmExtraAndroidGradleGenerator
                    const cmMakefile *makefile)
 {
   if(target->IsImported())
-    return {};
+    return std::set<std::string>();
 
   std::set<std::string> extensions;
 
