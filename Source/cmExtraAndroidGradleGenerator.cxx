@@ -123,12 +123,12 @@ void cmExtraAndroidGradleGenerator
               ExportTarget(target, generator, toolchain, config, abi);
             {
               const auto extensions =
-                ExportExtensions("C", target, makefile);
+                ExportExtensions("C", target, generator, makefile);
               cFileExtensions.insert(extensions.begin(), extensions.end());
             }
             {
               const auto extensions =
-                ExportExtensions("CXX", target, makefile);
+                ExportExtensions("CXX", target, generator, makefile);
               cppFileExtensions.insert(extensions.begin(), extensions.end());
             }
           }
@@ -153,6 +153,7 @@ void cmExtraAndroidGradleGenerator
 std::set<std::string> cmExtraAndroidGradleGenerator
 ::ExportExtensions(const std::string language,
                    const cmTarget *target,
+                   const cmLocalGenerator *generator,
                    const cmMakefile *makefile)
 {
   if(target->IsImported())
@@ -164,7 +165,7 @@ std::set<std::string> cmExtraAndroidGradleGenerator
 
   std::vector<cmSourceFile *> sources;
   cmGeneratorTarget *gt =
-    this->GlobalGenerator->FindGeneratorTarget(target->GetName());
+    generator->FindGeneratorTargetToUse(target->GetName());
   gt->GetSourceFiles(sources, config);
 
   for (const auto &source : sources)
@@ -209,10 +210,11 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // output
   cmGeneratorTarget *gt =
-    this->GlobalGenerator->FindGeneratorTarget(target->GetName());
-  if (target->GetType() != cmState::OBJECT_LIBRARY) {
+    generator->FindGeneratorTargetToUse(target->GetName());
+  if (target->GetType() != cmState::OBJECT_LIBRARY)
+  {
     const std::string output = gt->GetLocation(config);
-    if (!output.empty())
+    if (!output.empty() && !cmSystemTools::IsNOTFOUND(output.c_str()))
       NativeLibrary["output"] = output;
   }
 
@@ -257,7 +259,7 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // flagsString
   cmGeneratorTarget *gt =
-    this->GlobalGenerator->FindGeneratorTarget(target->GetName());
+    generator->FindGeneratorTargetToUse(target->GetName());
   cmAndroidGradleTargetGenerator tg(gt);
   NativeSourceFile["flags"] = tg.ExportFlags(source);
 

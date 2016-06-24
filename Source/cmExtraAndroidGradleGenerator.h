@@ -55,6 +55,7 @@ private:
 
   std::set<std::string> ExportExtensions(const std::string language,
                                          const cmTarget *target,
+                                         const cmLocalGenerator *generator,
                                          const cmMakefile *makefile);
 
   Json::Value ExportTarget(const cmTarget *target,
