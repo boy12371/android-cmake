@@ -92,8 +92,9 @@ void cmExtraAndroidGradleGenerator
     std::vector<const cmTarget *> targets;
     for (const auto &pair: makefile->GetTargets())
       targets.push_back(&pair.second);
-    for (const auto target: makefile->GetImportedTargets())
-      targets.push_back(target);
+    // TODO: re-enable once Studio learns to deal with this.
+    // for (const auto target: makefile->GetImportedTargets())
+    //   targets.push_back(target);
     for (const auto target: targets)
     {
       const auto &name = target->GetName();
