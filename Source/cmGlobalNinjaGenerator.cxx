@@ -550,7 +550,12 @@ void cmGlobalNinjaGenerator::EnableLanguage(
       strcmp(mf->GetSafeDefinition("CMAKE_C_COMPILER_ID"), "GNU") == 0 ||
       strcmp(mf->GetSafeDefinition("CMAKE_CXX_COMPILER_ID"), "GNU") == 0 ||
       strcmp(mf->GetSafeDefinition("CMAKE_C_SIMULATE_ID"), "GNU") == 0 ||
-      strcmp(mf->GetSafeDefinition("CMAKE_CXX_SIMULATE_ID"), "GNU") == 0) {
+      strcmp(mf->GetSafeDefinition("CMAKE_CXX_SIMULATE_ID"), "GNU") == 0 ||
+      // Clang uses the GCC toolchain.
+      strcmp(mf->GetSafeDefinition("CMAKE_C_COMPILER_ID"), "Clang") == 0 ||
+      strcmp(mf->GetSafeDefinition("CMAKE_CXX_COMPILER_ID"), "Clang") == 0 ||
+      strcmp(mf->GetSafeDefinition("CMAKE_C_SIMULATE_ID"), "Clang") == 0 ||
+      strcmp(mf->GetSafeDefinition("CMAKE_CXX_SIMULATE_ID"), "Clang") == 0) {
     this->UsingGCCOnWindows = true;
   }
 #endif
