@@ -153,6 +153,8 @@ endif()
 # Sources for CMakeLib
 #
 set(SRCS
+  cmAndroidGradleBuild.cxx
+  cmAndroidGradleBuild.h
   cmArchiveWrite.cxx
   cmBootstrapCommands1.cxx
   cmBootstrapCommands2.cxx
@@ -222,7 +224,6 @@ set(SRCS
   cmExportSetMap.cxx
   cmExternalMakefileProjectGenerator.cxx
   cmExternalMakefileProjectGenerator.h
-  cmExtraAndroidGradleGenerator.cxx
   cmExtraAndroidGradleGenerator.h
   cmExtraCodeBlocksGenerator.cxx
   cmExtraCodeBlocksGenerator.h

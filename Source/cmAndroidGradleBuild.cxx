@@ -9,44 +9,27 @@
   implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
   See the License for more information.
 ============================================================================*/
-#include "cmExtraAndroidGradleGenerator.h"
+#include "cmAndroidGradleBuild.h"
+
+#include <string>
 
 #include "cmGeneratedFileStream.h"
+#include "cmGlobalCommonGenerator.h"
 #include "cmLocalUnixMakefileGenerator3.h"
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
 #include "cm_jsoncpp_writer.h"
 
 //----------------------------------------------------------------------------
-void cmExtraAndroidGradleGenerator
-::GetDocumentation(cmDocumentationEntry& entry, const std::string&) const
+void cmAndroidGradleBuild
+::ExportProject(const cmGlobalCommonGenerator *globalGenerator)
 {
-  entry.Name = GetName();
-  entry.Brief = "Generates Android Gradle build files.";
-}
-
-cmExtraAndroidGradleGenerator
-::cmExtraAndroidGradleGenerator() : cmExternalMakefileProjectGenerator()
-{
-  SupportedGlobalGenerators.push_back("Unix Makefiles");
-  SupportedGlobalGenerators.push_back("Ninja");
-}
-
-void cmExtraAndroidGradleGenerator
-::Generate()
-{
-  GenerateProject(this->GlobalGenerator->GetLocalGenerators());
-}
-
-void cmExtraAndroidGradleGenerator
-::GenerateProject(const cmLocalGenerators &generators)
-{
-  if (generators.size() == 0)
+  const auto localGenerators = globalGenerator->GetLocalGenerators();
+  if (localGenerators.size() == 0)
     return;
 
-  cmMakefile *makefile = generators[0]->GetMakefile();
-
-  std::string output = makefile->GetHomeOutputDirectory();
+  std::string output =
+    globalGenerator->GetCMakeInstance()->GetHomeOutputDirectory();
   output += "/android_gradle_build.json";
 
   cmGeneratedFileStream fileStream{output.c_str()};
@@ -54,6 +37,12 @@ void cmExtraAndroidGradleGenerator
     return;
 
   Json::Value NativeBuildConfig;
+
+  std::vector<cmMakefile *> makefiles = globalGenerator->GetMakefiles();
+  if (makefiles.empty())
+    return;
+
+  cmMakefile *makefile = makefiles[0];
 
   // cleanCommand
   const std::string cmakeCommand = cmSystemTools::ConvertToOutputPath(
@@ -80,9 +69,9 @@ void cmExtraAndroidGradleGenerator
 
   std::set<std::string> cFileExtensions, cppFileExtensions;
 
-  for (const auto &generator : generators)
+  for (const auto &localGenerator : localGenerators)
   {
-    makefile = generator->GetMakefile();
+    makefile = localGenerator->GetMakefile();
 
     // buildFiles
     const std::string directory = makefile->GetCurrentSourceDirectory();
@@ -120,15 +109,18 @@ void cmExtraAndroidGradleGenerator
               library += '-' + abi;
 
             NativeBuildConfig["libraries"][library] =
-              ExportTarget(target, generator, toolchain, config, abi);
+              ExportTarget(globalGenerator, target,
+                           localGenerator, toolchain, config, abi);
             {
               const auto extensions =
-                ExportExtensions("C", target, generator, makefile);
+                ExportExtensions(globalGenerator, "C", target,
+                                 localGenerator, makefile);
               cFileExtensions.insert(extensions.begin(), extensions.end());
             }
             {
               const auto extensions =
-                ExportExtensions("CXX", target, generator, makefile);
+                ExportExtensions(globalGenerator, "CXX", target,
+                                 localGenerator, makefile);
               cppFileExtensions.insert(extensions.begin(), extensions.end());
             }
           }
@@ -150,10 +142,11 @@ void cmExtraAndroidGradleGenerator
   fileStream << NativeBuildConfig;
 }
 
-std::set<std::string> cmExtraAndroidGradleGenerator
-::ExportExtensions(const std::string language,
+std::set<std::string> cmAndroidGradleBuild
+::ExportExtensions(const cmGlobalCommonGenerator *globalGenerator,
+                   const std::string language,
                    const cmTarget *target,
-                   const cmLocalGenerator *generator,
+                   const cmLocalGenerator *localGenerator,
                    const cmMakefile *makefile)
 {
   if(target->IsImported())
@@ -165,7 +158,7 @@ std::set<std::string> cmExtraAndroidGradleGenerator
 
   std::vector<cmSourceFile *> sources;
   cmGeneratorTarget *gt =
-    generator->FindGeneratorTargetToUse(target->GetName());
+    localGenerator->FindGeneratorTargetToUse(target->GetName());
   gt->GetSourceFiles(sources, config);
 
   for (const auto &source : sources)
@@ -175,9 +168,10 @@ std::set<std::string> cmExtraAndroidGradleGenerator
   return extensions;
 }
 
-Json::Value cmExtraAndroidGradleGenerator
-::ExportTarget(const cmTarget *target,
-               const cmLocalGenerator *generator,
+Json::Value cmAndroidGradleBuild
+::ExportTarget(const cmGlobalCommonGenerator *globalGenerator,
+               const cmTarget *target,
+               const cmLocalGenerator *localGenerator,
                const std::string &toolchain,
                const std::string &config,
                const std::string &abi)
@@ -187,7 +181,7 @@ Json::Value cmExtraAndroidGradleGenerator
   // buildCommand
   if (!target->IsImported())
   {
-    const cmMakefile *makefile = generator->GetMakefile();
+    const cmMakefile *makefile = localGenerator->GetMakefile();
     const std::string cmakeCommand = cmSystemTools::ConvertToOutputPath(
       makefile->GetRequiredDefinition("CMAKE_COMMAND"));
     const std::string homeOutputDirectory = cmSystemTools::ConvertToOutputPath(
@@ -210,7 +204,7 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // output
   cmGeneratorTarget *gt =
-    generator->FindGeneratorTargetToUse(target->GetName());
+    localGenerator->FindGeneratorTargetToUse(target->GetName());
   if (target->GetType() != cmState::OBJECT_LIBRARY)
   {
     const std::string output = gt->GetLocation(config);
@@ -230,15 +224,17 @@ Json::Value cmExtraAndroidGradleGenerator
     {
       const std::string language = source->GetLanguage();
       if (language == "C" || language == "CXX")
-        NativeLibrary["files"].append(ExportSource(target, generator, source));
+        NativeLibrary["files"].append(ExportSource(globalGenerator, target,
+                                                   localGenerator, source));
     }
   }
 
   return NativeLibrary;
 }
 
-Json::Value cmExtraAndroidGradleGenerator
-::ExportSource(const cmTarget *target,
+Json::Value cmAndroidGradleBuild
+::ExportSource(const cmGlobalCommonGenerator *globalGenerator,
+               const cmTarget *target,
                const cmLocalGenerator *generator,
                const cmSourceFile *source)
 {
@@ -249,7 +245,7 @@ Json::Value cmExtraAndroidGradleGenerator
 
   // workingDirectory
   std::string workingDirectory;
-  if (this->GlobalGenerator->GetName() == "Ninja")
+  if (globalGenerator->GetName() == "Ninja")
     workingDirectory = generator->GetMakefile()->GetHomeOutputDirectory();
   else
     workingDirectory = generator->GetMakefile()->GetCurrentBinaryDirectory();
@@ -266,7 +262,7 @@ Json::Value cmExtraAndroidGradleGenerator
   return NativeSourceFile;
 }
 
-void cmExtraAndroidGradleGenerator::cmAndroidGradleTargetGenerator
+void cmAndroidGradleBuild::cmAndroidGradleTargetGenerator
 ::AddIncludeFlags(std::string &flags, const std::string &language)
 {
   const std::string config =
@@ -281,7 +277,7 @@ void cmExtraAndroidGradleGenerator::cmAndroidGradleTargetGenerator
 }
 
 // Copied from cmMakefileTargetGenerator::WriteObjectBuildFile.
-std::string cmExtraAndroidGradleGenerator::cmAndroidGradleTargetGenerator
+std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator
 ::ExportFlags(const cmSourceFile *source)
 {
   const std::string language = source->GetLanguage();

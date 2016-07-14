@@ -12,6 +12,7 @@
 #include "cmGlobalUnixMakefileGenerator3.h"
 
 #include "cmAlgorithms.h"
+#include "cmAndroidGradleBuild.h"
 #include "cmGeneratedFileStream.h"
 #include "cmGeneratorTarget.h"
 #include "cmLocalUnixMakefileGenerator3.h"
@@ -160,6 +161,17 @@ void cmGlobalUnixMakefileGenerator3::Generate()
     delete this->CommandDatabase;
     this->CommandDatabase = NULL;
   }
+
+  // TODO: move to proper location?
+#ifdef CMAKE_BUILD_WITH_CMAKE
+  std::vector<cmMakefile *> makefiles = this->GetMakefiles();
+  if (!makefiles.empty()) {
+    std::string systemName =
+      makefiles[0]->GetSafeDefinition("CMAKE_SYSTEM_NAME");
+    if (systemName == "Android")
+      cmAndroidGradleBuild::ExportProject(this);
+  }
+#endif
 }
 
 void cmGlobalUnixMakefileGenerator3::AddCXXCompileCommand(
