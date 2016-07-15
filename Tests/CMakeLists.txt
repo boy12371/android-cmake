@@ -58,6 +58,9 @@ if(BUILD_TESTING)
   endif()
 
   if(NOT CMake_TEST_EXTERNAL_CMAKE)
+    if("${CMAKE_GENERATOR}" MATCHES "Unix Makefiles" OR "${CMAKE_GENERATOR}" MATCHES Ninja)
+      set(TEST_AndroidGradleBuild 1)
+    endif()
     if("${CMAKE_GENERATOR}" MATCHES "Unix Makefiles" OR ("${CMAKE_GENERATOR}" MATCHES Ninja AND NOT WIN32))
       set(TEST_CompileCommandOutput 1)
     endif()
@@ -3244,6 +3247,11 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     endif()
     set_tests_properties(Contracts.${project} PROPERTIES TIMEOUT ${timeout})
   endforeach()
+
+  if(TEST_AndroidGradleBuild)
+    ADD_TEST_MACRO(AndroidGradleBuild
+      "${CMake_BINARY_DIR}/Tests/CMakeLib/checkandroidgradlebuild")
+  endif()
 
   if(TEST_CompileCommandOutput)
     set(CompileCommandOutput_BUILD_OPTIONS

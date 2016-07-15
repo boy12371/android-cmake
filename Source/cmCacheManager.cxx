@@ -39,8 +39,8 @@ void cmCacheManager::CleanCMakeFiles(const std::string& path)
 }
 
 bool cmCacheManager::LoadCache(const std::string& path, bool internal,
-                               std::set<std::string>& excludes,
-                               std::set<std::string>& includes)
+                               const std::set<std::string>& excludes,
+                               const std::set<std::string>& includes)
 {
   std::string cacheFile = path;
   cacheFile += "/CMakeCache.txt";

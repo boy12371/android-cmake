@@ -98,8 +98,8 @@ public:
 
   ///! Load a cache for given makefile.  Loads from path/CMakeCache.txt.
   bool LoadCache(const std::string& path, bool internal,
-                 std::set<std::string>& excludes,
-                 std::set<std::string>& includes);
+                 const std::set<std::string>& excludes,
+                 const std::set<std::string>& includes);
 
   ///! Save cache for given makefile.  Saves to ouput path/CMakeCache.txt
   bool SaveCache(const std::string& path);

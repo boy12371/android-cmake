@@ -44,6 +44,11 @@ foreach(test ${CMakeLib_TESTS})
   add_test(CMakeLib.${test} CMakeLibTests ${test} ${${test}_ARGS})
 endforeach()
 
+if(TEST_AndroidGradleBuild)
+  add_executable(checkandroidgradlebuild check_android_gradle_build.cxx)
+  target_link_libraries(checkandroidgradlebuild CMakeLib)
+endif()
+
 if(TEST_CompileCommandOutput)
   add_executable(runcompilecommands run_compile_commands.cxx)
   target_link_libraries(runcompilecommands CMakeLib)
