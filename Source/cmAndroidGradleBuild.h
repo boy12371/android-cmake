@@ -59,10 +59,10 @@ private:
   class cmAndroidGradleTargetGenerator : public cmCommonTargetGenerator {
   public:
     cmAndroidGradleTargetGenerator(cmGeneratorTarget *gt)
-      : cmCommonTargetGenerator{cmOutputConverter::NONE, gt},
-        LocalGenerator{
+      : cmCommonTargetGenerator(cmOutputConverter::NONE, gt),
+        LocalGenerator(
           static_cast<cmLocalAndroidGradleGenerator *>(gt->GetLocalGenerator())
-        }
+        )
     {}
     std::string ExportFlags(const cmSourceFile *source);
   private:
