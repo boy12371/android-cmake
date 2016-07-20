@@ -340,7 +340,10 @@ int checkProject(const Json::Value &project, const cmCacheManager &cache)
 int main()
 {
   cmCacheManager cache;
-  if (!cache.LoadCache(cmSystemTools::GetCurrentWorkingDirectory(), 1, {}, {}))
+  std::set<std::string> excludes;
+  std::set<std::string> includes;
+  if (!cache.LoadCache(cmSystemTools::GetCurrentWorkingDirectory(), 1,
+                       excludes, includes))
     return failure("Failed to load CMake cache.");
   if (strcmp(cache.GetInitializedCacheValue("CMAKE_SYSTEM_NAME"), "Android"))
     return failure("CMAKE_SYSTEM_NAME doesn't match Android.");
