@@ -61,6 +61,7 @@ int checkFiles(const Json::Value library,
     "-DDEFINITION",
     "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/shared").c_str()),
     "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/static").c_str()),
+    "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/object").c_str()),
     "-D" + cmSystemTools::UpperCase(language) + "_FLAGS",
     "-D" + cmSystemTools::UpperCase(language) + "_" +
       cmSystemTools::UpperCase(buildType) + "_FLAGS"
@@ -123,9 +124,11 @@ int checkLibrary(const Json::Value &libraries,
     "buildCommand",
     "buildType",
     "files",
-    "output",
     "toolchain"
   };
+
+  if (artifact != "object")
+    expectedMembers.insert("output");
 
   for (const auto &member : library.getMemberNames())
   {
@@ -168,10 +171,12 @@ int checkLibrary(const Json::Value &libraries,
       cache.GetInitializedCacheValue("CMAKE_STATIC_LIBRARY_PREFIX") +
       name +
       cache.GetInitializedCacheValue("CMAKE_STATIC_LIBRARY_SUFFIX");
-  else
+  else if (artifact == "exe")
     output = binary_dir + "/" + name +
       cache.GetInitializedCacheValue("CMAKE_EXECUTABLE_SUFFIX");
-  if (library["output"] != output)
+  else if (artifact == "object" && library.isMember("output"))
+    return failure(name + " should not contain output.");
+  if (!output.empty() && library["output"] != output)
     return failure(name + " output doesn't match " + output + ".");
   if (library["toolchain"] != toolchain)
     return failure(name + " toolchain doesn't match " + toolchain + ".");
@@ -234,7 +239,7 @@ int checkLibraries(const Json::Value &project, const cmCacheManager &cache)
     cache.GetInitializedCacheValue("CMAKE_ANDROID_ARCH_ABI");
   std::set<std::string> expectedLibraries;
   std::vector<std::string> languages = { "c", "cpp" };
-  std::vector<std::string> artifacts = { "exe", "shared", "static" };
+  std::vector<std::string> artifacts = { "exe", "shared", "static", "object" };
   for (const auto &language : languages)
     for (const auto &artifact : artifacts)
       expectedLibraries.insert(
@@ -324,6 +329,7 @@ int checkProject(const Json::Value &project, const cmCacheManager &cache)
                      source_dir + "/CMakeLists.txt",
                      source_dir + "/shared/CMakeLists.txt",
                      source_dir + "/static/CMakeLists.txt",
+                     source_dir + "/object/CMakeLists.txt",
                      }) ||
     checkStringArray(project, "cFileExtensions", { "c" }) ||
     checkStringArray(project, "cppFileExtensions", { "cpp" }) ||

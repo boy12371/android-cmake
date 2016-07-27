@@ -23,17 +23,21 @@ set(CMAKE_C_FLAGS_RELEASE   -DC_RELEASE_FLAGS)
 set(CMAKE_CXX_FLAGS_RELEASE -DCPP_RELEASE_FLAGS)
 
 add_definitions(-DDEFINITION)
-include_directories(static shared)
+include_directories(static shared object)
 
 add_subdirectory(shared)
 add_subdirectory(static)
+add_subdirectory(object)
 set(C_LIBRARIES c_shared c_static)
 set(CPP_LIBRARIES cpp_shared cpp_static)
 
-add_executable(c_exe main.c exe.c)
+add_executable(c_exe main.c exe.c
+  $<TARGET_OBJECTS:c_object>)
 target_link_libraries(c_exe ${C_LIBRARIES})
 
-add_executable(cpp_exe main.cpp exe.cpp)
+add_executable(cpp_exe main.cpp exe.cpp
+  $<TARGET_OBJECTS:c_object>
+  $<TARGET_OBJECTS:cpp_object>)
 target_link_libraries(cpp_exe ${C_LIBRARIES} ${CPP_LIBRARIES})
 
 add_library(missing SHARED IMPORTED)
