@@ -79,11 +79,11 @@ void cmAndroidGradleBuild
 
     // libraries
     std::vector<const cmTarget *> targets;
-    for (const auto &pair: makefile->GetTargets())
+    for (const auto &pair : makefile->GetTargets())
       targets.push_back(&pair.second);
-    for (const auto target: makefile->GetImportedTargets())
+    for (const auto target : makefile->GetImportedTargets())
       targets.push_back(target);
-    for (const auto target: targets)
+    for (const auto target : targets)
     {
       const auto &name = target->GetName();
       switch(target->GetType())
