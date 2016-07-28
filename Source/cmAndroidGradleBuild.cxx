@@ -85,7 +85,6 @@ void cmAndroidGradleBuild
       targets.push_back(target);
     for (const auto target : targets)
     {
-      const auto &name = target->GetName();
       switch(target->GetType())
       {
         case cmState::EXECUTABLE:
@@ -94,7 +93,7 @@ void cmAndroidGradleBuild
         case cmState::MODULE_LIBRARY:
         case cmState::OBJECT_LIBRARY:
           {
-            std::string library = name;
+            std::string library = target->GetName();
 
             const std::string config =
               makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
