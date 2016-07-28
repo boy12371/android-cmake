@@ -23,10 +23,11 @@ set(CMAKE_C_FLAGS_RELEASE   -DC_RELEASE_FLAGS)
 set(CMAKE_CXX_FLAGS_RELEASE -DCPP_RELEASE_FLAGS)
 
 add_definitions(-DDEFINITION)
-include_directories(static shared object)
+include_directories(static shared module object)
 
 add_subdirectory(shared)
 add_subdirectory(static)
+add_subdirectory(module)
 add_subdirectory(object)
 set(C_LIBRARIES c_shared c_static)
 set(CPP_LIBRARIES cpp_shared cpp_static)

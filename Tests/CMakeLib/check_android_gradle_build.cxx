@@ -61,6 +61,7 @@ int checkFiles(const Json::Value library,
     "-DDEFINITION",
     "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/shared").c_str()),
     "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/static").c_str()),
+    "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/module").c_str()),
     "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/object").c_str()),
     "-D" + cmSystemTools::UpperCase(language) + "_FLAGS",
     "-D" + cmSystemTools::UpperCase(language) + "_" +
@@ -161,7 +162,7 @@ int checkLibrary(const Json::Value &libraries,
   if (checkFiles(library, language, artifact, buildType, cache))
     return EXIT_FAILURE;
   std::string output;
-  if (artifact == "shared")
+  if (artifact == "shared" || artifact == "module")
     output = binary_dir + "/" + artifact + "/" +
       cache.GetInitializedCacheValue("CMAKE_SHARED_LIBRARY_PREFIX") +
       name +
@@ -239,7 +240,9 @@ int checkLibraries(const Json::Value &project, const cmCacheManager &cache)
     cache.GetInitializedCacheValue("CMAKE_ANDROID_ARCH_ABI");
   std::set<std::string> expectedLibraries;
   std::vector<std::string> languages = { "c", "cpp" };
-  std::vector<std::string> artifacts = { "exe", "shared", "static", "object" };
+  std::vector<std::string> artifacts = {
+    "exe", "shared", "static", "module", "object"
+  };
   for (const auto &language : languages)
     for (const auto &artifact : artifacts)
       expectedLibraries.insert(
@@ -249,7 +252,7 @@ int checkLibraries(const Json::Value &project, const cmCacheManager &cache)
   for (const auto &library : libraries.getMemberNames())
   {
     if (expectedLibraries.count(library) == 0)
-      return failure("Unrecognized library" + library + " in libraries.");
+      return failure("Unrecognized library " + library + " in libraries.");
     expectedLibraries.erase(library);
   }
   for (const auto &library : expectedLibraries)
@@ -329,6 +332,7 @@ int checkProject(const Json::Value &project, const cmCacheManager &cache)
                      source_dir + "/CMakeLists.txt",
                      source_dir + "/shared/CMakeLists.txt",
                      source_dir + "/static/CMakeLists.txt",
+                     source_dir + "/module/CMakeLists.txt",
                      source_dir + "/object/CMakeLists.txt",
                      }) ||
     checkStringArray(project, "cFileExtensions", { "c" }) ||
