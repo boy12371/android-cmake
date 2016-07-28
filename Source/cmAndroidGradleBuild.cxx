@@ -234,7 +234,7 @@ Json::Value cmAndroidGradleBuild
 Json::Value cmAndroidGradleBuild
 ::ExportSource(const cmGlobalCommonGenerator *globalGenerator,
                const cmTarget *target,
-               const cmLocalGenerator *generator,
+               const cmLocalGenerator *localGenerator,
                const cmSourceFile *source)
 {
   Json::Value NativeSourceFile;
@@ -245,16 +245,16 @@ Json::Value cmAndroidGradleBuild
   // workingDirectory
   std::string workingDirectory;
   if (globalGenerator->GetName() == "Ninja")
-    workingDirectory = generator->GetMakefile()->GetHomeOutputDirectory();
+    workingDirectory = localGenerator->GetMakefile()->GetHomeOutputDirectory();
   else
-    workingDirectory = generator->GetMakefile()->GetCurrentBinaryDirectory();
+    workingDirectory = localGenerator->GetMakefile()->GetCurrentBinaryDirectory();
   workingDirectory =
-    generator->Convert(workingDirectory, cmLocalGenerator::FULL);
+    localGenerator->Convert(workingDirectory, cmLocalGenerator::FULL);
   NativeSourceFile["workingDirectory"] = workingDirectory;
 
   // flagsString
   cmGeneratorTarget *gt =
-    generator->FindGeneratorTargetToUse(target->GetName());
+    localGenerator->FindGeneratorTargetToUse(target->GetName());
   cmAndroidGradleTargetGenerator tg(gt);
   NativeSourceFile["flags"] = tg.ExportFlags(source);
 
