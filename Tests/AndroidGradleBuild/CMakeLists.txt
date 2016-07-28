@@ -39,7 +39,6 @@ add_executable(c_exe main.c exe.c
 target_link_libraries(c_exe ${C_LIBRARIES})
 
 add_executable(cpp_exe main.cpp exe.cpp
-  $<TARGET_OBJECTS:c_object>
   $<TARGET_OBJECTS:cpp_object>)
 target_link_libraries(cpp_exe ${C_LIBRARIES} ${CPP_LIBRARIES})
 

@@ -1,7 +1,6 @@
 extern "C" {
 #include "shared.h"
 #include "static.h"
-#include "object.h"
 }
 #include "exe.hpp"
 #include "shared.hpp"
@@ -11,7 +10,6 @@ extern "C" {
 int main() {
   c_shared();
   c_static();
-  c_object();
   cpp_exe();
   cpp_shared();
   cpp_static();

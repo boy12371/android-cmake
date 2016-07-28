@@ -30,7 +30,7 @@ class cmAndroidGradleBuild
 {
 public:
 
-  static void ExportProject(const cmGlobalCommonGenerator *globalGenerator);
+  static void ExportProject(cmGlobalCommonGenerator *globalGenerator);
 
 private:
 
@@ -42,7 +42,7 @@ private:
                      const cmMakefile *makefile);
 
   static Json::Value
-    ExportTarget(const cmGlobalCommonGenerator *globalGenerator,
+    ExportTarget(cmGlobalCommonGenerator *globalGenerator,
                  const cmTarget *target,
                  const cmLocalGenerator *localGenerator,
                  const std::string &toolchain,
@@ -51,9 +51,9 @@ private:
 
   static Json::Value
     ExportSource(const cmGlobalCommonGenerator *globalGenerator,
-                 const cmTarget *target,
                  const cmLocalGenerator *localGenerator,
-                 const cmSourceFile *source);
+                 const cmSourceFile *source,
+                 cmGeneratorTarget *generatorTarget);
 
   /** Dummy target generator for ExportFlags.  */
   class cmAndroidGradleTargetGenerator : public cmCommonTargetGenerator {

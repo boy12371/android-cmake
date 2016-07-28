@@ -53,6 +53,7 @@ int checkFiles(const Json::Value library,
   {
     expectedSources.insert(source_dir + "/main." + language);
     expectedSources.insert(source_dir + "/" + artifact + "." + language);
+    expectedSources.insert(source_dir + "/object/object." + language);
   }
   else
     expectedSources.insert(source_dir + "/" + artifact + "/" +
@@ -125,11 +126,9 @@ int checkLibrary(const Json::Value &libraries,
     "buildCommand",
     "buildType",
     "files",
+    "output",
     "toolchain"
   };
-
-  if (artifact != "object")
-    expectedMembers.insert("output");
 
   for (const auto &member : library.getMemberNames())
   {
@@ -180,9 +179,7 @@ int checkLibrary(const Json::Value &libraries,
       cache.GetInitializedCacheValue("CMAKE_SHARED_MODULE_PREFIX") +
       name +
       cache.GetInitializedCacheValue("CMAKE_SHARED_MODULE_SUFFIX");
-  else if (artifact == "object" && library.isMember("output"))
-    return failure(name + " should not contain output.");
-  if (!output.empty() && library["output"] != output)
+  if (library["output"] != output)
     return failure(name + " output doesn't match " + output + ".");
   if (library["toolchain"] != toolchain)
     return failure(name + " toolchain doesn't match " + toolchain + ".");
@@ -246,14 +243,13 @@ int checkLibraries(const Json::Value &project, const cmCacheManager &cache)
   std::set<std::string> expectedLibraries;
   std::vector<std::string> languages = { "c", "cpp" };
   std::vector<std::string> artifacts = {
-    "exe", "shared", "static", "module", "object"
+    "exe", "shared", "static", "module"
   };
   for (const auto &language : languages)
     for (const auto &artifact : artifacts)
       expectedLibraries.insert(
         language + "_" + artifact + "-" + buildType + "-" + abi);
   expectedLibraries.insert("imported-" + buildType + "-" + abi);
-  expectedLibraries.insert("missing-" + buildType + "-" + abi);
   for (const auto &library : libraries.getMemberNames())
   {
     if (expectedLibraries.count(library) == 0)
@@ -267,7 +263,7 @@ int checkLibraries(const Json::Value &project, const cmCacheManager &cache)
       if (checkLibrary(libraries, language, artifact, buildType, abi, toolchain,
                        cache))
         return EXIT_FAILURE;
-  for (const auto &library : { "imported", "missing" })
+  for (const auto &library : { "imported" })
     if (checkImportedLibrary(libraries, library, buildType, abi, toolchain))
       return EXIT_FAILURE;
   return EXIT_SUCCESS;
