@@ -33,7 +33,7 @@ void cmAndroidGradleBuild
   output += "/android_gradle_build.json";
 
   cmGeneratedFileStream fileStream{output.c_str()};
-  if(!fileStream)
+  if (!fileStream)
     return;
 
   Json::Value NativeBuildConfig;
@@ -90,7 +90,7 @@ void cmAndroidGradleBuild
       targets.push_back(target);
     for (const auto target : targets)
     {
-      switch(target->GetType())
+      switch (target->GetType())
       {
         case cmState::EXECUTABLE:
         case cmState::STATIC_LIBRARY:
@@ -147,7 +147,7 @@ std::set<std::string> cmAndroidGradleBuild
                    const cmLocalGenerator *localGenerator,
                    const cmMakefile *makefile)
 {
-  if(target->IsImported())
+  if (target->IsImported())
     return std::set<std::string>();
 
   std::set<std::string> extensions;
@@ -298,11 +298,11 @@ std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator
   std::set<std::string> defines;
 
   // Add source-sepcific preprocessor definitions.
-  if(const char* compileDefinitions =
-       source->GetProperty("COMPILE_DEFINITIONS"))
+  if (const char* compileDefinitions =
+      source->GetProperty("COMPILE_DEFINITIONS"))
     this->LocalGenerator->AppendDefines(defines, compileDefinitions);
-  if(const char *compileDefinitions =
-       source->GetProperty("COMPILE_DEFINITIONS_" + config))
+  if (const char *compileDefinitions =
+      source->GetProperty("COMPILE_DEFINITIONS_" + config))
     this->LocalGenerator->AppendDefines(defines, compileDefinitions);
 
   const std::string languageDefines = "$(" + language + "_DEFINES)";
