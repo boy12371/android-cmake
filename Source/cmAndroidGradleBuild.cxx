@@ -78,6 +78,11 @@ void cmAndroidGradleBuild
     NativeBuildConfig["buildFiles"].append(directory + "/CMakeLists.txt");
 
     // libraries
+    const std::string config =
+      makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
+    const std::string abi =
+      makefile->GetSafeDefinition("CMAKE_ANDROID_ARCH_ABI");
+
     std::vector<const cmTarget *> targets;
     for (const auto &pair : makefile->GetTargets())
       targets.push_back(&pair.second);
@@ -95,14 +100,8 @@ void cmAndroidGradleBuild
           {
             std::string library = target->GetName();
 
-            const std::string config =
-              makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
-
             if (!config.empty())
               library += '-' + config;
-
-            const std::string abi =
-              makefile->GetSafeDefinition("CMAKE_ANDROID_ARCH_ABI");
 
             if (!abi.empty())
               library += '-' + abi;
