@@ -162,7 +162,10 @@ int checkLibrary(const Json::Value &libraries,
   if (checkFiles(library, language, artifact, buildType, cache))
     return EXIT_FAILURE;
   std::string output;
-  if (artifact == "shared" || artifact == "module")
+  if (artifact == "exe")
+    output = binary_dir + "/" + name +
+      cache.GetInitializedCacheValue("CMAKE_EXECUTABLE_SUFFIX");
+  else if (artifact == "shared")
     output = binary_dir + "/" + artifact + "/" +
       cache.GetInitializedCacheValue("CMAKE_SHARED_LIBRARY_PREFIX") +
       name +
@@ -172,9 +175,11 @@ int checkLibrary(const Json::Value &libraries,
       cache.GetInitializedCacheValue("CMAKE_STATIC_LIBRARY_PREFIX") +
       name +
       cache.GetInitializedCacheValue("CMAKE_STATIC_LIBRARY_SUFFIX");
-  else if (artifact == "exe")
-    output = binary_dir + "/" + name +
-      cache.GetInitializedCacheValue("CMAKE_EXECUTABLE_SUFFIX");
+  else if (artifact == "module")
+    output = binary_dir + "/" + artifact + "/" +
+      cache.GetInitializedCacheValue("CMAKE_SHARED_MODULE_PREFIX") +
+      name +
+      cache.GetInitializedCacheValue("CMAKE_SHARED_MODULE_SUFFIX");
   else if (artifact == "object" && library.isMember("output"))
     return failure(name + " should not contain output.");
   if (!output.empty() && library["output"] != output)
