@@ -57,7 +57,7 @@ int checkFiles(const Json::Value library,
   }
   else
     expectedSources.insert(source_dir + "/" + artifact + "/" +
-                       artifact + "." + language);
+                           artifact + "." + language);
   std::set<std::string> expectedFlags = {
     "-DDEFINITION",
     "-I" + cmSystemTools::ConvertToOutputPath((source_dir + "/shared").c_str()),
@@ -92,10 +92,10 @@ int checkFiles(const Json::Value library,
     const std::string workingDirectory = file["workingDirectory"].asString();
     std::string expectedWorkingDirectory = binary_dir;
     if (generator == "Unix Makefiles" && artifact != "exe")
-        expectedWorkingDirectory += "/" + artifact;
+      expectedWorkingDirectory += "/" + artifact;
     if (workingDirectory != expectedWorkingDirectory)
-        return failure("workingDirectory doesn't match " +
-                       expectedWorkingDirectory + ".");
+      return failure("workingDirectory doesn't match " +
+                     expectedWorkingDirectory + ".");
 
     const std::string flags = file["flags"].asString();
     for (const auto &flag : expectedFlags)
