@@ -91,8 +91,9 @@ int checkFiles(const Json::Value library,
 
     const std::string workingDirectory = file["workingDirectory"].asString();
     std::string expectedWorkingDirectory = binary_dir;
-    if (generator == "Unix Makefiles" && artifact != "exe")
-      expectedWorkingDirectory += "/" + artifact;
+    if (generator == "Unix Makefiles")
+      expectedWorkingDirectory +=
+        cmSystemTools::GetParentDirectory(src).substr(source_dir.length());
     if (workingDirectory != expectedWorkingDirectory)
       return failure("workingDirectory doesn't match " +
                      expectedWorkingDirectory + ".");
