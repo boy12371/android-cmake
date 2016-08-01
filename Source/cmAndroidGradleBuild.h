@@ -35,8 +35,7 @@ public:
 private:
 
   static std::set<std::string>
-    ExportExtensions(const cmGlobalCommonGenerator *globalGenerator,
-                     const std::string language,
+    ExportExtensions(const std::string language,
                      const cmTarget *target,
                      const cmLocalGenerator *localGenerator,
                      const cmMakefile *makefile);

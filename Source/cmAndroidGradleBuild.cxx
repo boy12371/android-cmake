@@ -113,14 +113,12 @@ void cmAndroidGradleBuild
 
             {
               const auto extensions =
-                ExportExtensions(globalGenerator, "C", target,
-                                 localGenerator, makefile);
+                ExportExtensions("C", target, localGenerator, makefile);
               cFileExtensions.insert(extensions.begin(), extensions.end());
             }
             {
               const auto extensions =
-                ExportExtensions(globalGenerator, "CXX", target,
-                                 localGenerator, makefile);
+                ExportExtensions("CXX", target, localGenerator, makefile);
               cppFileExtensions.insert(extensions.begin(), extensions.end());
             }
           }
@@ -143,8 +141,7 @@ void cmAndroidGradleBuild
 }
 
 std::set<std::string> cmAndroidGradleBuild
-::ExportExtensions(const cmGlobalCommonGenerator *globalGenerator,
-                   const std::string language,
+::ExportExtensions(const std::string language,
                    const cmTarget *target,
                    const cmLocalGenerator *localGenerator,
                    const cmMakefile *makefile)
