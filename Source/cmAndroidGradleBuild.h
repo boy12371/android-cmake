@@ -29,50 +29,46 @@ class cmTarget;
 class cmAndroidGradleBuild
 {
 public:
-
-  static void ExportProject(cmGlobalCommonGenerator *globalGenerator);
+  static void ExportProject(cmGlobalCommonGenerator* globalGenerator);
 
 private:
+  static std::set<std::string> ExportExtensions(
+    const std::string language, const cmTarget* target,
+    const cmLocalGenerator* localGenerator, const cmMakefile* makefile);
 
-  static std::set<std::string>
-    ExportExtensions(const std::string language,
-                     const cmTarget *target,
-                     const cmLocalGenerator *localGenerator,
-                     const cmMakefile *makefile);
+  static Json::Value ExportTarget(cmGlobalCommonGenerator* globalGenerator,
+                                  const cmTarget* target,
+                                  const cmLocalGenerator* localGenerator,
+                                  const std::string& toolchain,
+                                  const std::string& config,
+                                  const std::string& abi);
 
-  static Json::Value
-    ExportTarget(cmGlobalCommonGenerator *globalGenerator,
-                 const cmTarget *target,
-                 const cmLocalGenerator *localGenerator,
-                 const std::string &toolchain,
-                 const std::string &config,
-                 const std::string &abi);
-
-  static Json::Value
-    ExportSource(const cmGlobalCommonGenerator *globalGenerator,
-                 const cmLocalGenerator *localGenerator,
-                 const cmSourceFile *source,
-                 cmGeneratorTarget *generatorTarget);
+  static Json::Value ExportSource(
+    const cmGlobalCommonGenerator* globalGenerator,
+    const cmLocalGenerator* localGenerator, const cmSourceFile* source,
+    cmGeneratorTarget* generatorTarget);
 
   /** Dummy target generator for ExportFlags.  */
-  class cmAndroidGradleTargetGenerator : public cmCommonTargetGenerator {
+  class cmAndroidGradleTargetGenerator : public cmCommonTargetGenerator
+  {
   public:
-    cmAndroidGradleTargetGenerator(cmGeneratorTarget *gt)
-      : cmCommonTargetGenerator(cmOutputConverter::NONE, gt),
-        LocalGenerator(
-          static_cast<cmLocalAndroidGradleGenerator *>(gt->GetLocalGenerator())
-        )
-    {}
-    std::string ExportFlags(const cmSourceFile *source);
+    cmAndroidGradleTargetGenerator(cmGeneratorTarget* gt)
+      : cmCommonTargetGenerator(cmOutputConverter::NONE, gt)
+      , LocalGenerator(
+          static_cast<cmLocalAndroidGradleGenerator*>(gt->GetLocalGenerator()))
+    {
+    }
+    std::string ExportFlags(const cmSourceFile* source);
+
   private:
-    void AddIncludeFlags(std::string &flags,
-                         const std::string &language) override;
+    void AddIncludeFlags(std::string& flags,
+                         const std::string& language) override;
 
     /** Dummy local generator for ExpandRuleVariables.  */
     class cmLocalAndroidGradleGenerator : public cmLocalCommonGenerator
     {
       friend class cmAndroidGradleTargetGenerator;
-    } *LocalGenerator;
+    } * LocalGenerator;
   };
 };
 

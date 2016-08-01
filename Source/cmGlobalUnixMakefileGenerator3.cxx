@@ -162,9 +162,9 @@ void cmGlobalUnixMakefileGenerator3::Generate()
     this->CommandDatabase = NULL;
   }
 
-  // TODO: move to proper location?
+// TODO: move to proper location?
 #ifdef CMAKE_BUILD_WITH_CMAKE
-  std::vector<cmMakefile *> makefiles = this->GetMakefiles();
+  std::vector<cmMakefile*> makefiles = this->GetMakefiles();
   if (!makefiles.empty()) {
     std::string systemName =
       makefiles[0]->GetSafeDefinition("CMAKE_SYSTEM_NAME");

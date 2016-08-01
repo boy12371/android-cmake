@@ -1,3 +1,5 @@
 #include "shared.h"
 
-void c_shared() {}
+void c_shared()
+{
+}

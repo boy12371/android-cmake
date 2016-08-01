@@ -18,11 +18,11 @@ set(CMAKE_SHARED_MODULE_PREFIX  ${CMAKE_SHARED_MODULE_PREFIX}  CACHE "" INTERNAL
 set(CMAKE_SHARED_MODULE_SUFFIX  ${CMAKE_SHARED_MODULE_SUFFIX}  CACHE "" INTERNAL FORCE)
 
 set(CMAKE_C_FLAGS           -DC_FLAGS)
-set(CMAKE_CXX_FLAGS         -DCPP_FLAGS)
+set(CMAKE_CXX_FLAGS         -DCXX_FLAGS)
 set(CMAKE_C_FLAGS_DEBUG     -DC_DEBUG_FLAGS)
-set(CMAKE_CXX_FLAGS_DEBUG   -DCPP_DEBUG_FLAGS)
+set(CMAKE_CXX_FLAGS_DEBUG   -DCXX_DEBUG_FLAGS)
 set(CMAKE_C_FLAGS_RELEASE   -DC_RELEASE_FLAGS)
-set(CMAKE_CXX_FLAGS_RELEASE -DCPP_RELEASE_FLAGS)
+set(CMAKE_CXX_FLAGS_RELEASE -DCXX_RELEASE_FLAGS)
 
 add_definitions(-DDEFINITION)
 include_directories(static shared module object)
@@ -32,15 +32,15 @@ add_subdirectory(static)
 add_subdirectory(module)
 add_subdirectory(object)
 set(C_LIBRARIES c_shared c_static)
-set(CPP_LIBRARIES cpp_shared cpp_static)
+set(CXX_LIBRARIES cxx_shared cxx_static)
 
 add_executable(c_exe main.c exe.c
   $<TARGET_OBJECTS:c_object>)
 target_link_libraries(c_exe ${C_LIBRARIES})
 
-add_executable(cpp_exe main.cpp exe.cpp
-  $<TARGET_OBJECTS:cpp_object>)
-target_link_libraries(cpp_exe ${C_LIBRARIES} ${CPP_LIBRARIES})
+add_executable(cxx_exe main.cxx exe.cxx
+  $<TARGET_OBJECTS:cxx_object>)
+target_link_libraries(cxx_exe ${C_LIBRARIES} ${CXX_LIBRARIES})
 
 add_library(missing SHARED IMPORTED)
 add_library(imported SHARED IMPORTED)

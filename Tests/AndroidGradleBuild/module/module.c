@@ -1,3 +1,5 @@
 #include "module.h"
 
-void c_module() {}
+void c_module()
+{
+}

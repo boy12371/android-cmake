@@ -1,3 +1,5 @@
 #include "object.h"
 
-void c_object() {}
+void c_object()
+{
+}

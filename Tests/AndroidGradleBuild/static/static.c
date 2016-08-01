@@ -1,3 +1,5 @@
 #include "static.h"
 
-void c_static() {}
+void c_static()
+{
+}

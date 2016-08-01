@@ -1,9 +1,10 @@
 #include "exe.h"
+#include "object.h"
 #include "shared.h"
 #include "static.h"
-#include "object.h"
 
-int main() {
+int main()
+{
   c_exe();
   c_shared();
   c_static();

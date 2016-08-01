@@ -1,3 +1,5 @@
 #include "exe.h"
 
-void c_exe() {}
+void c_exe()
+{
+}
