@@ -5,7 +5,8 @@ project(AndroidGradleBuild C CXX)
 set(CMAKE_SYSTEM_NAME      Android CACHE "" INTERNAL FORCE)
 set(CMAKE_BUILD_TYPE       Debug   CACHE "" INTERNAL FORCE)
 set(CMAKE_ANDROID_ARCH_ABI x86_64  CACHE "" INTERNAL FORCE)
-set(CMAKE_SYSROOT /fake/sysroot/platform/android CACHE "" INTERNAL FORCE)
+# Need to use a real sysroot, so it still compiles.
+set(CMAKE_SYSROOT          /       CACHE "" INTERNAL FORCE)
 
 # Force Windows build to generate .lib files.
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
