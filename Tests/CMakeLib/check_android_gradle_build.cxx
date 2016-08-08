@@ -65,6 +65,10 @@ int checkFiles(const Json::Value library, const std::string& language,
     "-D" + cmSystemTools::UpperCase(language) + "_" +
       cmSystemTools::UpperCase(buildType) + "_FLAGS"
   };
+  std::string compiler = cache.GetInitializedCacheValue("CMAKE_C_COMPILER_ID");
+  if (compiler == "GNU" || compiler == "Clang")
+    expectedFlags.insert(std::string("--sysroot=") +
+                         cache.GetInitializedCacheValue("CMAKE_SYSROOT"));
   for (const auto& file : files) {
     std::set<std::string> expectedMembers = { "flags", "src",
                                               "workingDirectory" };
