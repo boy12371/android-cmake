@@ -14,21 +14,40 @@ int failure(const std::string& message)
   return EXIT_FAILURE;
 }
 
+int checkMembers(const std::string& name, const std::set<std::string>& members,
+                 std::set<std::string> expectedMembers)
+{
+  for (const auto& member : members) {
+    if (expectedMembers.count(member) == 0)
+      return failure("Unrecognized member " + member + " in " + name + ".");
+    expectedMembers.erase(member);
+  }
+  for (const auto& member : expectedMembers)
+    return failure(name + " doesn't contain " + member + ".");
+  return EXIT_SUCCESS;
+}
+
+int checkMembers(const std::string& name, const Json::Value& value,
+                 const std::set<std::string>& expectedMembers)
+{
+  std::set<std::string> members;
+  if (value.isArray())
+    for (const auto& member : value)
+      members.insert(member.asString());
+  else if (value.isObject())
+    for (const auto& member : value.getMemberNames())
+      members.insert(member);
+  return checkMembers(name, { members.begin(), members.end() },
+                      expectedMembers);
+}
+
 int checkStringArray(const Json::Value& project, const std::string& name,
                      std::set<std::string> expectedMembers)
 {
   const Json::Value array = project[name];
   if (!array.isArray())
     return failure(name + " is not an array.");
-  for (const Json::Value& member : array) {
-    const auto str = member.asString();
-    if (expectedMembers.count(str) == 0)
-      return failure("Unrecognized member " + str + " in " + name + ".");
-    expectedMembers.erase(str);
-  }
-  for (const auto& member : expectedMembers)
-    return failure(name + " doesn't contain " + member + ".");
-  return EXIT_SUCCESS;
+  return checkMembers(name, array, expectedMembers);
 }
 
 int checkFiles(const Json::Value library, const std::string& language,
@@ -72,13 +91,8 @@ int checkFiles(const Json::Value library, const std::string& language,
   for (const auto& file : files) {
     std::set<std::string> expectedMembers = { "flags", "src",
                                               "workingDirectory" };
-    for (const auto& member : file.getMemberNames()) {
-      if (expectedMembers.count(member) == 0)
-        return failure("Unrecognized member " + member + " in files.");
-      expectedMembers.erase(member);
-    }
-    for (const auto& member : expectedMembers)
-      return failure("files doesn't contain " + member + ".");
+    if (checkMembers("files", file, expectedMembers) == EXIT_FAILURE)
+      return EXIT_FAILURE;
 
     const std::string src = file["src"].asString();
     if (expectedSources.count(src) == 0)
@@ -104,47 +118,10 @@ int checkFiles(const Json::Value library, const std::string& language,
   return EXIT_SUCCESS;
 }
 
-int checkLibrary(const Json::Value& libraries, const std::string& language,
-                 const std::string& artifact, const std::string& buildType,
-                 const std::string& abi, const std::string& toolchain,
-                 const cmCacheManager& cache)
+int checkOutput(const Json::Value& library, const std::string& name,
+                const std::string& artifact, const std::string& binary_dir,
+                const cmCacheManager& cache)
 {
-  const std::string name = language + "_" + artifact;
-  const Json::Value library = libraries[name + "-" + buildType + "-" + abi];
-  if (!library.isObject())
-    return failure("library is not a JSON object.");
-  std::set<std::string> expectedMembers = { "abi",          "artifactName",
-                                            "buildCommand", "buildType",
-                                            "files",        "output",
-                                            "toolchain" };
-
-  for (const auto& member : library.getMemberNames()) {
-    if (expectedMembers.count(member) == 0)
-      return failure("Unrecognized member " + member + " in " + name +
-                     " library.");
-    expectedMembers.erase(member);
-  }
-  for (const auto& member : expectedMembers)
-    return failure(name + " library doesn't contain " + member + ".");
-
-  if (library["abi"] != abi)
-    return failure(name + " abi doesn't match " + abi + ".");
-  if (library["artifactName"] != name)
-    return failure(name + " artifactName doesn't match " + name + ".");
-  const std::string cmake = cache.GetInitializedCacheValue("CMAKE_COMMAND");
-  const std::string binary_dir =
-    cache.GetInitializedCacheValue("AndroidGradleBuild_BINARY_DIR");
-  const std::string buildCommand =
-    cmSystemTools::ConvertToOutputPath(cmake.c_str()) + " --build " +
-    cmSystemTools::ConvertToOutputPath(binary_dir.c_str()) + " --target " +
-    name;
-  if (library["buildCommand"] != buildCommand)
-    return failure(name + " buildCommand doesn't match " + buildCommand + ".");
-  if (library["buildType"] != cmSystemTools::LowerCase(buildType))
-    return failure(name + " buildType doesn't match " +
-                   cmSystemTools::LowerCase(buildType) + ".");
-  if (checkFiles(library, language, artifact, buildType, cache))
-    return EXIT_FAILURE;
   std::string output;
   if (artifact == "exe")
     output = binary_dir + "/" + name +
@@ -163,6 +140,48 @@ int checkLibrary(const Json::Value& libraries, const std::string& language,
       cache.GetInitializedCacheValue("CMAKE_SHARED_MODULE_SUFFIX");
   if (library["output"] != output)
     return failure(name + " output doesn't match " + output + ".");
+  return EXIT_SUCCESS;
+}
+
+int checkLibrary(const Json::Value& libraries, const std::string& language,
+                 const std::string& artifact, const std::string& buildType,
+                 const std::string& abi, const std::string& toolchain,
+                 const cmCacheManager& cache)
+{
+  const std::string name = language + "_" + artifact;
+  const Json::Value library = libraries[name + "-" + buildType + "-" + abi];
+  if (!library.isObject())
+    return failure("library is not a JSON object.");
+  std::set<std::string> expectedMembers = { "abi",          "artifactName",
+                                            "buildCommand", "buildType",
+                                            "files",        "output",
+                                            "toolchain" };
+
+  if (checkMembers(name + " library", library, expectedMembers) ==
+      EXIT_FAILURE)
+    return EXIT_FAILURE;
+
+  if (library["abi"] != abi)
+    return failure(name + " abi doesn't match " + abi + ".");
+  if (library["artifactName"] != name)
+    return failure(name + " artifactName doesn't match " + name + ".");
+  const std::string cmake = cache.GetInitializedCacheValue("CMAKE_COMMAND");
+  const std::string binary_dir =
+    cache.GetInitializedCacheValue("AndroidGradleBuild_BINARY_DIR");
+  const std::string buildCommand =
+    cmSystemTools::ConvertToOutputPath(cmake.c_str()) + " --build " +
+    cmSystemTools::ConvertToOutputPath(binary_dir.c_str()) + " --target " +
+    name;
+  if (library["buildCommand"] != buildCommand)
+    return failure(name + " buildCommand doesn't match " + buildCommand + ".");
+  if (library["buildType"] != cmSystemTools::LowerCase(buildType))
+    return failure(name + " buildType doesn't match " +
+                   cmSystemTools::LowerCase(buildType) + ".");
+  if (checkFiles(library, language, artifact, buildType, cache) ==
+      EXIT_FAILURE)
+    return EXIT_FAILURE;
+  if (checkOutput(library, name, artifact, binary_dir, cache) == EXIT_FAILURE)
+    return EXIT_FAILURE;
   if (library["toolchain"] != toolchain)
     return failure(name + " toolchain doesn't match " + toolchain + ".");
   return EXIT_SUCCESS;
@@ -180,14 +199,9 @@ int checkImportedLibrary(const Json::Value& libraries, const std::string& name,
   if (name == "imported")
     expectedMembers.insert("output");
 
-  for (const auto& member : library.getMemberNames()) {
-    if (expectedMembers.count(member) == 0)
-      return failure("Unrecognized member " + member + " in " + name +
-                     " library.");
-    expectedMembers.erase(member);
-  }
-  for (const auto& member : expectedMembers)
-    return failure(name + " library doesn't contain " + member + ".");
+  if (checkMembers(name + " library", library, expectedMembers) ==
+      EXIT_FAILURE)
+    return EXIT_FAILURE;
 
   if (library["abi"] != abi)
     return failure(name + " abi doesn't match " + abi + ".");
@@ -223,20 +237,18 @@ int checkLibraries(const Json::Value& project, const cmCacheManager& cache)
       expectedLibraries.insert(language + "_" + artifact + "-" + buildType +
                                "-" + abi);
   expectedLibraries.insert("imported-" + buildType + "-" + abi);
-  for (const auto& library : libraries.getMemberNames()) {
-    if (expectedLibraries.count(library) == 0)
-      return failure("Unrecognized library " + library + " in libraries.");
-    expectedLibraries.erase(library);
-  }
-  for (const auto& library : expectedLibraries)
-    return failure("Libraries doesn't contain " + library + ".");
+
+  if (checkMembers("libraries", libraries, expectedLibraries) == EXIT_FAILURE)
+    return EXIT_FAILURE;
+
   for (const auto& language : languages)
     for (const auto& artifact : artifacts)
       if (checkLibrary(libraries, language, artifact, buildType, abi,
-                       toolchain, cache))
+                       toolchain, cache) == EXIT_FAILURE)
         return EXIT_FAILURE;
   for (const auto& library : { "imported" })
-    if (checkImportedLibrary(libraries, library, buildType, abi, toolchain))
+    if (checkImportedLibrary(libraries, library, buildType, abi, toolchain) ==
+        EXIT_FAILURE)
       return EXIT_FAILURE;
   return EXIT_SUCCESS;
 }
@@ -254,13 +266,8 @@ int checkToolchains(const Json::Value& project, const cmCacheManager& cache)
   std::set<std::string> expectedMembers = {
     "cCompilerExecutable", "cppCompilerExecutable",
   };
-  for (const auto& member : toolchain.getMemberNames()) {
-    if (expectedMembers.count(member) == 0)
-      return failure("Unrecognized member" + member + " in toolchain.");
-    expectedMembers.erase(member);
-  }
-  for (const auto& member : expectedMembers)
-    return failure("Toolchain doesn't contain " + member + ".");
+  if (checkMembers("toolchain", toolchain, expectedMembers) == EXIT_FAILURE)
+    return EXIT_FAILURE;
 
   std::string cc = cache.GetInitializedCacheValue("CMAKE_C_COMPILER");
   std::string cxx = cache.GetInitializedCacheValue("CMAKE_CXX_COMPILER");
@@ -280,13 +287,8 @@ int checkProject(const Json::Value& project, const cmCacheManager& cache)
   };
   if (!project.isObject())
     return failure("Project is not a JSON object.");
-  for (const auto& member : project.getMemberNames()) {
-    if (expectedMembers.count(member) == 0)
-      return failure("Unrecognized member " + member + " in project.");
-    expectedMembers.erase(member);
-  }
-  for (const auto& member : expectedMembers)
-    return failure("Project doesn't contain " + member + ".");
+  if (checkMembers("project", project, expectedMembers) == EXIT_FAILURE)
+    return EXIT_FAILURE;
 
   const std::string cmake = cache.GetInitializedCacheValue("CMAKE_COMMAND");
   const std::string source_dir =
