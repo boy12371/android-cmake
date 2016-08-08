@@ -324,12 +324,9 @@ std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator::ExportFlags(
   std::string compileCommand =
     this->Makefile->GetRequiredDefinition(compileRuleVar);
 
-  const auto& unusedRules = { "<CMAKE_C_COMPILER>",
-                              "<CMAKE_CXX_COMPILER>",
-                              "-c",
-                              "-o",
-                              "<OBJECT>",
-                              "<SOURCE>" };
+  // Flags like -target, -gcc-toolchain, and --sysroot are attached to the
+  // compiler, so we can't just remove the compiler rules.
+  const auto& unusedRules = { "-o <OBJECT>", "<SOURCE>" };
   // Remove unwanted rules.
   for (const std::string& unusedRule : unusedRules) {
     const auto& position = compileCommand.find(unusedRule);
@@ -344,6 +341,19 @@ std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator::ExportFlags(
                          languageDefines.size(), GetDefines(language));
   compileCommand.replace(compileCommand.find(languageIncludes),
                          languageIncludes.size(), GetIncludes(language));
+
+  // Strip away the compiler from the compile command.
+  // See cmLocalGenerator::ExpandRuleVariable for how the compiler rule is
+  // expanded.
+  std::string compiler =
+    this->Makefile->GetSafeDefinition("CMAKE_" + language + "_COMPILER");
+  compiler = this->LocalGenerator->ConvertToOutputForExisting(compiler);
+  // If we're using ccache, remove the actual compiler as well.
+  std::string arg1 =
+    this->Makefile->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ARG1");
+  if (!arg1.empty())
+    compiler += " " + arg1;
+  compileCommand = compileCommand.substr(compiler.length());
 
   return compileCommand;
 }
