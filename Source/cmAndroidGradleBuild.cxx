@@ -348,11 +348,6 @@ std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator::ExportFlags(
   std::string compiler =
     this->Makefile->GetSafeDefinition("CMAKE_" + language + "_COMPILER");
   compiler = this->LocalGenerator->ConvertToOutputForExisting(compiler);
-  // If we're using ccache, remove the actual compiler as well.
-  std::string arg1 =
-    this->Makefile->GetSafeDefinition("CMAKE_" + language + "_COMPILER_ARG1");
-  if (!arg1.empty())
-    compiler += " " + arg1;
   compileCommand = compileCommand.substr(compiler.length());
 
   return compileCommand;
