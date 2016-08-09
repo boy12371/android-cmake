@@ -326,10 +326,10 @@ std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator::ExportFlags(
 
   // Flags like -target, -gcc-toolchain, and --sysroot are attached to the
   // compiler, so we can't just remove the compiler rules.
-  const auto& unusedRules = { "-o <OBJECT>", "<SOURCE>" };
+  const auto unusedRules = { "-o <OBJECT>", "<SOURCE>" };
   // Remove unwanted rules.
   for (const std::string& unusedRule : unusedRules) {
-    const auto& position = compileCommand.find(unusedRule);
+    const auto position = compileCommand.find(unusedRule);
     if (position != std::string::npos)
       compileCommand.erase(position, unusedRule.size());
   }
