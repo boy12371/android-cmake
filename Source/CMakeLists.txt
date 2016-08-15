@@ -224,7 +224,6 @@ set(SRCS
   cmExportSetMap.cxx
   cmExternalMakefileProjectGenerator.cxx
   cmExternalMakefileProjectGenerator.h
-  cmExtraAndroidGradleGenerator.h
   cmExtraCodeBlocksGenerator.cxx
   cmExtraCodeBlocksGenerator.h
   cmExtraCodeLiteGenerator.cxx

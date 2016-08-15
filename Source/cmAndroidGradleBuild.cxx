@@ -1,6 +1,6 @@
 /*============================================================================
   CMake - Cross Platform Makefile Generator
-  Copyright 2004-2016 Kitware, Inc.
+  Copyright 2016 Kitware, Inc.
 
   Distributed under the OSI-approved BSD License (the "License");
   see accompanying file Copyright.txt for details.
@@ -14,13 +14,10 @@
 #include <string>
 
 #include "cmGeneratedFileStream.h"
-#include "cmGlobalCommonGenerator.h"
-#include "cmLocalUnixMakefileGenerator3.h"
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
 #include "cm_jsoncpp_writer.h"
 
-//----------------------------------------------------------------------------
 void cmAndroidGradleBuild::ExportProject(
   cmGlobalCommonGenerator* globalGenerator)
 {
@@ -54,6 +51,11 @@ void cmAndroidGradleBuild::ExportProject(
   NativeBuildConfig["cleanCommands"].append(cleanCommand);
 
   // toolchains
+  //
+  // The toolchain in CMake consists of just the C and C++ compilers.
+  // We need to generate the toolchain ID in such a way that it avoids
+  // collisions with other build configurations, so we just use a hash of the
+  // compiler locations.
   Json::Value toolchains;
   const std::string cCompiler =
     makefile->GetSafeDefinition("CMAKE_C_COMPILER");
@@ -92,6 +94,10 @@ void cmAndroidGradleBuild::ExportProject(
         case cmState::STATIC_LIBRARY:
         case cmState::SHARED_LIBRARY:
         case cmState::MODULE_LIBRARY: {
+
+          // The name of each library is formatted as
+          // <target name>-<build type>-<abi>
+          // to avoid collision with other build configurations.
           std::string library = target->GetName();
 
           if (!config.empty())
@@ -134,7 +140,7 @@ void cmAndroidGradleBuild::ExportProject(
 }
 
 std::set<std::string> cmAndroidGradleBuild::ExportExtensions(
-  const std::string language, const cmTarget* target,
+  const std::string& language, const cmTarget* target,
   const cmLocalGenerator* localGenerator, const cmMakefile* makefile)
 {
   if (target->IsImported())
@@ -190,7 +196,8 @@ Json::Value cmAndroidGradleBuild::ExportTarget(
   cmGeneratorTarget* generatorTarget =
     localGenerator->FindGeneratorTargetToUse(target->GetName());
   const std::string output = generatorTarget->GetLocation(config);
-  // Probably an imported library without location.  We'll ignore this.
+  // Probably an imported library without location.
+  // We can't have a target without output, so we'll ignore this target.
   if (output.empty() || cmSystemTools::IsNOTFOUND(output.c_str()))
     return Json::nullValue;
   NativeLibrary["output"] = output;
@@ -254,27 +261,28 @@ Json::Value cmAndroidGradleBuild::ExportSource(
     localGenerator->Convert(workingDirectory, cmLocalGenerator::FULL);
   NativeSourceFile["workingDirectory"] = workingDirectory;
 
-  // flagsString
+  // flags
   cmAndroidGradleTargetGenerator targetGenerator(generatorTarget);
   NativeSourceFile["flags"] = targetGenerator.ExportFlags(source);
 
   return NativeSourceFile;
 }
 
+// See cmMakefileTargetGenerator::AddIncludeFlags
+// and cmNinjaTargetGenerator::AddIncludeFlags.
 void cmAndroidGradleBuild::cmAndroidGradleTargetGenerator::AddIncludeFlags(
   std::string& flags, const std::string& language)
 {
-  const std::string config =
-    this->Makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
   std::vector<std::string> includes;
   this->LocalGenerator->GetIncludeDirectories(includes, this->GeneratorTarget,
-                                              language, config);
+                                              language, this->GetConfigName());
   const std::string includeFlags = this->LocalGenerator->GetIncludeFlags(
-    includes, this->GeneratorTarget, language, false, false, config);
+    includes, this->GeneratorTarget, language, false, false,
+    this->GetConfigName());
   this->LocalGenerator->AppendFlags(flags, includeFlags);
 }
 
-// Copied from cmMakefileTargetGenerator::WriteObjectBuildFile.
+// See cmMakefileTargetGenerator::WriteObjectBuildFile.
 std::string cmAndroidGradleBuild::cmAndroidGradleTargetGenerator::ExportFlags(
   const cmSourceFile* source)
 {

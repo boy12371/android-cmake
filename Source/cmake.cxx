@@ -45,10 +45,6 @@
 #define CMAKE_USE_ECLIPSE
 #endif
 
-#if defined(CMAKE_BUILD_WITH_CMAKE)
-#define CMAKE_USE_ANDROID_GRADLE
-#endif
-
 #if defined(__MINGW32__) && !defined(CMAKE_BUILD_WITH_CMAKE)
 #define CMAKE_BOOT_MINGW
 #endif
@@ -96,7 +92,8 @@
 #include "cmExtraEclipseCDT4Generator.h"
 #endif
 
-#ifdef CMAKE_USE_ANDROID_GRADLE
+// TODO: remove this when upstreaming.
+#if defined(CMAKE_BUILD_WITH_CMAKE)
 #include "cmExtraAndroidGradleGenerator.h"
 #endif
 
@@ -818,8 +815,10 @@ void cmake::AddDefaultExtraGenerators()
 // e.g. kdevelop4 ?
 #endif
 
+  // TODO: remove this when upstreaming.
   this->AddExtraGenerator(cmExtraAndroidGradleGenerator::GetActualName(),
                           &cmExtraAndroidGradleGenerator::New);
+
   this->AddExtraGenerator(cmExtraCodeBlocksGenerator::GetActualName(),
                           &cmExtraCodeBlocksGenerator::New);
   this->AddExtraGenerator(cmExtraCodeLiteGenerator::GetActualName(),

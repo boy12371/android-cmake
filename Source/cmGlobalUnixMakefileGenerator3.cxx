@@ -162,7 +162,7 @@ void cmGlobalUnixMakefileGenerator3::Generate()
     this->CommandDatabase = NULL;
   }
 
-// TODO: move to proper location?
+// TODO: find out where this should go when upstreaming.
 #ifdef CMAKE_BUILD_WITH_CMAKE
   std::vector<cmMakefile*> makefiles = this->GetMakefiles();
   if (!makefiles.empty()) {
