@@ -5,9 +5,9 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmExternalMakefileProjectGenerator.h"
-
 #include <string>
+
+#include "cmExternalMakefileProjectGenerator.h"
 
 class cmGeneratedFileStream;
 class cmLocalGenerator;
@@ -31,7 +31,8 @@ private:
                     cmGeneratedFileStream& fout) const;
   void AppendTarget(cmGeneratedFileStream& fout, const std::string& target,
                     const std::string& make, const std::string& makeArgs,
-                    const std::string& path, const char* homeOutputDir) const;
+                    const std::string& path,
+                    const std::string& homeOutputDir) const;
 
   std::string GenerateFilesString(const cmLocalGenerator* lg) const;
   std::string GetPathBasename(const std::string& path) const;

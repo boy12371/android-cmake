@@ -5,12 +5,14 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCTestGenericHandler.h"
-
 #include <sstream>
-#include <stddef.h>
 #include <string>
 #include <vector>
+
+#include <stddef.h>
+
+#include "cmCTestGenericHandler.h"
+#include "cmDuration.h"
 
 class cmake;
 
@@ -21,7 +23,7 @@ class cmake;
 class cmCTestBuildAndTestHandler : public cmCTestGenericHandler
 {
 public:
-  typedef cmCTestGenericHandler Superclass;
+  using Superclass = cmCTestGenericHandler;
 
   /*
    * The main entry point for this class
@@ -43,7 +45,7 @@ public:
   void Initialize() override;
 
 protected:
-  ///! Run CMake and build a test and then run it as a single test.
+  //! Run CMake and build a test and then run it as a single test.
   int RunCMakeAndTest(std::string* output);
   int RunCMake(std::string* outstring, std::ostringstream& out,
                std::string& cmakeOutString, cmake* cm);
@@ -67,7 +69,7 @@ protected:
   std::vector<std::string> TestCommandArgs;
   std::vector<std::string> BuildTargets;
   bool BuildNoCMake;
-  double Timeout;
+  cmDuration Timeout;
 };
 
 #endif

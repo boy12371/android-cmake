@@ -5,10 +5,10 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
+#include <string>
+
 #include "cmCursesStandardIncludes.h"
 #include "cmCursesWidget.h"
-
-#include <string>
 
 class cmCursesMainForm;
 
@@ -20,8 +20,6 @@ class cmCursesMainForm;
 
 class cmCursesStringWidget : public cmCursesWidget
 {
-  CM_DISABLE_COPY(cmCursesStringWidget)
-
 public:
   cmCursesStringWidget(int width, int height, int left, int top);
 
@@ -64,7 +62,7 @@ public:
 protected:
   // true if the widget is in edit mode
   bool InEdit;
-  char* OriginalString;
+  std::string OriginalString;
   bool Done;
 };
 

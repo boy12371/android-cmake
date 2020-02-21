@@ -2,20 +2,21 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCPackIFWPackage.h"
 
+#include <cstddef>
+#include <map>
+#include <sstream>
+#include <utility>
+
 #include "cmCPackComponentGroup.h"
 #include "cmCPackIFWCommon.h"
 #include "cmCPackIFWGenerator.h"
 #include "cmCPackIFWInstaller.h"
 #include "cmCPackLog.h" // IWYU pragma: keep
 #include "cmGeneratedFileStream.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmTimestamp.h"
 #include "cmXMLWriter.h"
-
-#include <map>
-#include <sstream>
-#include <stddef.h>
-#include <utility>
 
 //---------------------------------------------------------- CompareStruct ---
 cmCPackIFWPackage::CompareStruct::CompareStruct()
@@ -24,9 +25,7 @@ cmCPackIFWPackage::CompareStruct::CompareStruct()
 }
 
 //------------------------------------------------------- DependenceStruct ---
-cmCPackIFWPackage::DependenceStruct::DependenceStruct()
-{
-}
+cmCPackIFWPackage::DependenceStruct::DependenceStruct() = default;
 
 cmCPackIFWPackage::DependenceStruct::DependenceStruct(
   const std::string& dependence)
@@ -126,10 +125,10 @@ void cmCPackIFWPackage::DefaultConfiguration()
   this->RequiresAdminRights.clear();
 }
 
-// Defaul configuration (all in one package)
+// Default configuration (all in one package)
 int cmCPackIFWPackage::ConfigureFromOptions()
 {
-  // Restore defaul configuration
+  // Restore default configuration
   this->DefaultConfiguration();
 
   // Name
@@ -168,7 +167,7 @@ int cmCPackIFWPackage::ConfigureFromComponent(cmCPackComponent* component)
     return 0;
   }
 
-  // Restore defaul configuration
+  // Restore default configuration
   this->DefaultConfiguration();
 
   std::string prefix = "CPACK_IFW_COMPONENT_" +
@@ -198,7 +197,7 @@ int cmCPackIFWPackage::ConfigureFromComponent(cmCPackComponent* component)
   // User interfaces
   if (const char* option = this->GetOption(prefix + "USER_INTERFACES")) {
     this->UserInterfaces.clear();
-    cmSystemTools::ExpandListArgument(option, this->UserInterfaces);
+    cmExpandList(option, this->UserInterfaces);
   }
 
   // CMake dependencies
@@ -211,7 +210,7 @@ int cmCPackIFWPackage::ConfigureFromComponent(cmCPackComponent* component)
   // Licenses
   if (const char* option = this->GetOption(prefix + "LICENSES")) {
     this->Licenses.clear();
-    cmSystemTools::ExpandListArgument(option, this->Licenses);
+    cmExpandList(option, this->Licenses);
     if (this->Licenses.size() % 2 != 0) {
       cmCPackIFWLogger(
         WARNING,
@@ -226,7 +225,8 @@ int cmCPackIFWPackage::ConfigureFromComponent(cmCPackComponent* component)
   if (const char* option = this->GetOption(prefix + "PRIORITY")) {
     this->SortingPriority = option;
     cmCPackIFWLogger(
-      WARNING, "The \"PRIORITY\" option is set "
+      WARNING,
+      "The \"PRIORITY\" option is set "
         << "for component \"" << component->Name << "\", but there option is "
         << "deprecated. Please use \"SORTING_PRIORITY\" option instead."
         << std::endl);
@@ -255,7 +255,7 @@ int cmCPackIFWPackage::ConfigureFromGroup(cmCPackComponentGroup* group)
     return 0;
   }
 
-  // Restore defaul configuration
+  // Restore default configuration
   this->DefaultConfiguration();
 
   std::string prefix = "CPACK_IFW_COMPONENT_GROUP_" +
@@ -282,13 +282,13 @@ int cmCPackIFWPackage::ConfigureFromGroup(cmCPackComponentGroup* group)
   // User interfaces
   if (const char* option = this->GetOption(prefix + "USER_INTERFACES")) {
     this->UserInterfaces.clear();
-    cmSystemTools::ExpandListArgument(option, this->UserInterfaces);
+    cmExpandList(option, this->UserInterfaces);
   }
 
   // Licenses
   if (const char* option = this->GetOption(prefix + "LICENSES")) {
     this->Licenses.clear();
-    cmSystemTools::ExpandListArgument(option, this->Licenses);
+    cmExpandList(option, this->Licenses);
     if (this->Licenses.size() % 2 != 0) {
       cmCPackIFWLogger(
         WARNING,
@@ -303,7 +303,8 @@ int cmCPackIFWPackage::ConfigureFromGroup(cmCPackComponentGroup* group)
   if (const char* option = this->GetOption(prefix + "PRIORITY")) {
     this->SortingPriority = option;
     cmCPackIFWLogger(
-      WARNING, "The \"PRIORITY\" option is set "
+      WARNING,
+      "The \"PRIORITY\" option is set "
         << "for component group \"" << group->Name
         << "\", but there option is "
         << "deprecated. Please use \"SORTING_PRIORITY\" option instead."
@@ -357,7 +358,7 @@ int cmCPackIFWPackage::ConfigureFromPrefix(const std::string& prefix)
   if (this->IsSetToEmpty(option)) {
     this->DisplayName.clear();
   } else if (const char* value = this->GetOption(option)) {
-    this->ExpandListArgument(value, this->DisplayName);
+    cmCPackIFWPackage::ExpandListArgument(value, this->DisplayName);
   }
 
   // Description
@@ -365,7 +366,7 @@ int cmCPackIFWPackage::ConfigureFromPrefix(const std::string& prefix)
   if (this->IsSetToEmpty(option)) {
     this->Description.clear();
   } else if (const char* value = this->GetOption(option)) {
-    this->ExpandListArgument(value, this->Description);
+    cmCPackIFWPackage::ExpandListArgument(value, this->Description);
   }
 
   // Release date
@@ -398,18 +399,18 @@ int cmCPackIFWPackage::ConfigureFromPrefix(const std::string& prefix)
     this->Translations.clear();
   } else if (const char* value = this->GetOption(option)) {
     this->Translations.clear();
-    cmSystemTools::ExpandListArgument(value, this->Translations);
+    cmExpandList(value, this->Translations);
   }
 
   // QtIFW dependencies
   std::vector<std::string> deps;
   option = prefix + "DEPENDS";
   if (const char* value = this->GetOption(option)) {
-    cmSystemTools::ExpandListArgument(value, deps);
+    cmExpandList(value, deps);
   }
   option = prefix + "DEPENDENCIES";
   if (const char* value = this->GetOption(option)) {
-    cmSystemTools::ExpandListArgument(value, deps);
+    cmExpandList(value, deps);
   }
   for (std::string const& d : deps) {
     DependenceStruct dep(d);
@@ -430,8 +431,7 @@ int cmCPackIFWPackage::ConfigureFromPrefix(const std::string& prefix)
   if (this->IsSetToEmpty(option)) {
     this->AlienAutoDependOn.clear();
   } else if (const char* value = this->GetOption(option)) {
-    std::vector<std::string> depsOn;
-    cmSystemTools::ExpandListArgument(value, depsOn);
+    std::vector<std::string> depsOn = cmExpandedList(value);
     for (std::string const& d : depsOn) {
       DependenceStruct dep(d);
       if (this->Generator->Packages.count(dep.Name)) {
@@ -488,7 +488,7 @@ int cmCPackIFWPackage::ConfigureFromPrefix(const std::string& prefix)
     this->Replaces.clear();
   } else if (const char* value = this->GetOption(option)) {
     this->Replaces.clear();
-    cmSystemTools::ExpandListArgument(value, this->Replaces);
+    cmExpandList(value, this->Replaces);
   }
 
   // Requires admin rights
@@ -526,7 +526,7 @@ void cmCPackIFWPackage::GeneratePackageFile()
   }
 
   // Output stream
-  cmGeneratedFileStream fout((this->Directory + "/meta/package.xml").data());
+  cmGeneratedFileStream fout(this->Directory + "/meta/package.xml");
   cmXMLWriter xout(fout);
 
   xout.StartDocument();
@@ -620,7 +620,7 @@ void cmCPackIFWPackage::GeneratePackageFile()
   // Write dependencies
   if (!compDepSet.empty()) {
     std::ostringstream dependencies;
-    std::set<DependenceStruct>::iterator it = compDepSet.begin();
+    auto it = compDepSet.begin();
     dependencies << it->NameWithCompare();
     ++it;
     while (it != compDepSet.end()) {
@@ -638,7 +638,7 @@ void cmCPackIFWPackage::GeneratePackageFile()
   // Write automatic dependency on
   if (!compAutoDepSet.empty()) {
     std::ostringstream dependencies;
-    std::set<DependenceStruct>::iterator it = compAutoDepSet.begin();
+    auto it = compAutoDepSet.begin();
     dependencies << it->NameWithCompare();
     ++it;
     while (it != compAutoDepSet.end()) {
@@ -674,7 +674,7 @@ void cmCPackIFWPackage::GeneratePackageFile()
   // Replaces
   if (!this->Replaces.empty()) {
     std::ostringstream replaces;
-    std::vector<std::string>::iterator it = this->Replaces.begin();
+    auto it = this->Replaces.begin();
     replaces << *it;
     ++it;
     while (it != this->Replaces.end()) {

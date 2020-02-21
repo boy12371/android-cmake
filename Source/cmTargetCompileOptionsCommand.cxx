@@ -2,50 +2,49 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmTargetCompileOptionsCommand.h"
 
-#include <sstream>
-
-#include "cmAlgorithms.h"
 #include "cmListFileCache.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
+#include "cmStringAlgorithms.h"
 #include "cmTarget.h"
-#include "cmake.h"
+#include "cmTargetPropCommandBase.h"
 
-class cmExecutionStatus;
+namespace {
 
-bool cmTargetCompileOptionsCommand::InitialPass(
-  std::vector<std::string> const& args, cmExecutionStatus&)
+class TargetCompileOptionsImpl : public cmTargetPropCommandBase
 {
-  return this->HandleArguments(args, "COMPILE_OPTIONS", PROCESS_BEFORE);
-}
+public:
+  using cmTargetPropCommandBase::cmTargetPropCommandBase;
 
-void cmTargetCompileOptionsCommand::HandleImportedTarget(
-  const std::string& tgt)
-{
-  std::ostringstream e;
-  e << "Cannot specify compile options for imported target \"" << tgt << "\".";
-  this->Makefile->IssueMessage(cmake::FATAL_ERROR, e.str());
-}
+private:
+  void HandleMissingTarget(const std::string& name) override
+  {
+    this->Makefile->IssueMessage(
+      MessageType::FATAL_ERROR,
+      cmStrCat("Cannot specify compile options for target \"", name,
+               "\" which is not built by this project."));
+  }
 
-void cmTargetCompileOptionsCommand::HandleMissingTarget(
-  const std::string& name)
-{
-  std::ostringstream e;
-  e << "Cannot specify compile options for target \"" << name
-    << "\" "
-       "which is not built by this project.";
-  this->Makefile->IssueMessage(cmake::FATAL_ERROR, e.str());
-}
+  bool HandleDirectContent(cmTarget* tgt,
+                           const std::vector<std::string>& content,
+                           bool /*prepend*/, bool /*system*/) override
+  {
+    cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
+    tgt->InsertCompileOption(this->Join(content), lfbt);
+    return true; // Successfully handled.
+  }
 
-std::string cmTargetCompileOptionsCommand::Join(
-  const std::vector<std::string>& content)
-{
-  return cmJoin(content, ";");
-}
+  std::string Join(const std::vector<std::string>& content) override
+  {
+    return cmJoin(content, ";");
+  }
+};
 
-bool cmTargetCompileOptionsCommand::HandleDirectContent(
-  cmTarget* tgt, const std::vector<std::string>& content, bool, bool)
+} // namespace
+
+bool cmTargetCompileOptionsCommand(std::vector<std::string> const& args,
+                                   cmExecutionStatus& status)
 {
-  cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
-  tgt->InsertCompileOption(this->Join(content), lfbt);
-  return true;
+  return TargetCompileOptionsImpl(status).HandleArguments(
+    args, "COMPILE_OPTIONS", TargetCompileOptionsImpl::PROCESS_BEFORE);
 }

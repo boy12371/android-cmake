@@ -2,38 +2,39 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmGeneratorExpressionDAGChecker.h"
 
-#include "cmAlgorithms.h"
+#include <cstring>
+#include <sstream>
+#include <utility>
+
 #include "cmGeneratorExpressionContext.h"
 #include "cmGeneratorExpressionEvaluator.h"
 #include "cmGeneratorTarget.h"
 #include "cmLocalGenerator.h"
+#include "cmMessageType.h"
+#include "cmStringAlgorithms.h"
 #include "cmake.h"
 
-#include <sstream>
-#include <string.h>
-#include <utility>
-
 cmGeneratorExpressionDAGChecker::cmGeneratorExpressionDAGChecker(
-  const cmListFileBacktrace& backtrace, const std::string& target,
-  const std::string& property, const GeneratorExpressionContent* content,
+  cmListFileBacktrace backtrace, cmGeneratorTarget const* target,
+  std::string property, const GeneratorExpressionContent* content,
   cmGeneratorExpressionDAGChecker* parent)
   : Parent(parent)
   , Target(target)
-  , Property(property)
+  , Property(std::move(property))
   , Content(content)
-  , Backtrace(backtrace)
+  , Backtrace(std::move(backtrace))
   , TransitivePropertiesOnly(false)
 {
   Initialize();
 }
 
 cmGeneratorExpressionDAGChecker::cmGeneratorExpressionDAGChecker(
-  const std::string& target, const std::string& property,
+  cmGeneratorTarget const* target, std::string property,
   const GeneratorExpressionContent* content,
   cmGeneratorExpressionDAGChecker* parent)
   : Parent(parent)
   , Target(target)
-  , Property(property)
+  , Property(std::move(property))
   , Content(content)
   , Backtrace()
   , TransitivePropertiesOnly(false)
@@ -55,11 +56,10 @@ void cmGeneratorExpressionDAGChecker::Initialize()
 
   if (CheckResult == DAG &&
       (CM_FOR_EACH_TRANSITIVE_PROPERTY_METHOD(
-        TEST_TRANSITIVE_PROPERTY_METHOD) false)) // NOLINT(clang-tidy)
+        TEST_TRANSITIVE_PROPERTY_METHOD) false)) // NOLINT(*)
 #undef TEST_TRANSITIVE_PROPERTY_METHOD
   {
-    std::map<std::string, std::set<std::string>>::const_iterator it =
-      top->Seen.find(this->Target);
+    auto it = top->Seen.find(this->Target);
     if (it != top->Seen.end()) {
       const std::set<std::string>& propSet = it->second;
       if (propSet.find(this->Property) != propSet.end()) {
@@ -67,9 +67,7 @@ void cmGeneratorExpressionDAGChecker::Initialize()
         return;
       }
     }
-    const_cast<cmGeneratorExpressionDAGChecker*>(top)
-      ->Seen[this->Target]
-      .insert(this->Property);
+    top->Seen[this->Target].insert(this->Property);
   }
 }
 
@@ -99,8 +97,8 @@ void cmGeneratorExpressionDAGChecker::ReportError(
       << "  " << expr << "\n"
       << "Self reference on target \"" << context->HeadTarget->GetName()
       << "\".\n";
-    context->LG->GetCMakeInstance()->IssueMessage(cmake::FATAL_ERROR, e.str(),
-                                                  parent->Backtrace);
+    context->LG->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
+                                                  e.str(), parent->Backtrace);
     return;
   }
 
@@ -111,8 +109,8 @@ void cmGeneratorExpressionDAGChecker::ReportError(
     << "  " << expr << "\n"
     << "Dependency loop found.";
     /* clang-format on */
-    context->LG->GetCMakeInstance()->IssueMessage(cmake::FATAL_ERROR, e.str(),
-                                                  context->Backtrace);
+    context->LG->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
+                                                  e.str(), context->Backtrace);
   }
 
   int loopStep = 1;
@@ -122,8 +120,8 @@ void cmGeneratorExpressionDAGChecker::ReportError(
       << "  "
       << (parent->Content ? parent->Content->GetOriginalExpression() : expr)
       << "\n";
-    context->LG->GetCMakeInstance()->IssueMessage(cmake::FATAL_ERROR, e.str(),
-                                                  parent->Backtrace);
+    context->LG->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
+                                                  e.str(), parent->Backtrace);
     parent = parent->Parent;
     ++loopStep;
   }
@@ -154,7 +152,26 @@ bool cmGeneratorExpressionDAGChecker::GetTransitivePropertiesOnly()
   return top->TransitivePropertiesOnly;
 }
 
-bool cmGeneratorExpressionDAGChecker::EvaluatingLinkLibraries(const char* tgt)
+bool cmGeneratorExpressionDAGChecker::EvaluatingGenexExpression()
+{
+  return this->Property.find("TARGET_GENEX_EVAL:") == 0 ||
+    this->Property.find("GENEX_EVAL:", 0) == 0;
+}
+
+bool cmGeneratorExpressionDAGChecker::EvaluatingPICExpression()
+{
+  const cmGeneratorExpressionDAGChecker* top = this;
+  const cmGeneratorExpressionDAGChecker* parent = this->Parent;
+  while (parent) {
+    top = parent;
+    parent = parent->Parent;
+  }
+
+  return top->Property == "INTERFACE_POSITION_INDEPENDENT_CODE";
+}
+
+bool cmGeneratorExpressionDAGChecker::EvaluatingLinkLibraries(
+  cmGeneratorTarget const* tgt)
 {
   const cmGeneratorExpressionDAGChecker* top = this;
   const cmGeneratorExpressionDAGChecker* parent = this->Parent;
@@ -177,7 +194,7 @@ bool cmGeneratorExpressionDAGChecker::EvaluatingLinkLibraries(const char* tgt)
     strcmp(prop, "INTERFACE_LINK_LIBRARIES") == 0;
 }
 
-std::string cmGeneratorExpressionDAGChecker::TopTarget() const
+cmGeneratorTarget const* cmGeneratorExpressionDAGChecker::TopTarget() const
 {
   const cmGeneratorExpressionDAGChecker* top = this;
   const cmGeneratorExpressionDAGChecker* parent = this->Parent;

@@ -5,20 +5,21 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCursesForm.h"
-#include "cmCursesStandardIncludes.h"
-
 #include <string>
 #include <vector>
 
+#include "cmCursesForm.h"
+#include "cmCursesStandardIncludes.h"
+
 class cmCursesLongMessageForm : public cmCursesForm
 {
-  CM_DISABLE_COPY(cmCursesLongMessageForm)
-
 public:
   cmCursesLongMessageForm(std::vector<std::string> const& messages,
                           const char* title);
   ~cmCursesLongMessageForm() override;
+
+  cmCursesLongMessageForm(cmCursesLongMessageForm const&) = delete;
+  cmCursesLongMessageForm& operator=(cmCursesLongMessageForm const&) = delete;
 
   // Description:
   // Handle user input.

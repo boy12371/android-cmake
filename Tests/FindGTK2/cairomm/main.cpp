@@ -5,16 +5,16 @@
  * et. al.
  */
 #if defined(_MSC_VER)
-#define _USE_MATH_DEFINES
+#  define _USE_MATH_DEFINES
 #endif
+
+#include <cmath>
+#include <iostream>
+#include <string>
 
 #include <cairomm/context.h>
 #include <cairomm/surface.h>
 #include <cairommconfig.h>
-#include <iostream>
-#include <string>
-
-#include <cmath>
 
 int main()
 {

@@ -5,10 +5,10 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCPackGenerator.h"
-
 #include <string>
 #include <vector>
+
+#include "cmCPackGenerator.h"
 
 /** \class cmCPackDebGenerator
  * \brief A generator for Debian packages
@@ -65,6 +65,8 @@ protected:
 
 private:
   int createDeb();
+  int createDbgsymDDeb();
+
   std::vector<std::string> packageFiles;
 };
 

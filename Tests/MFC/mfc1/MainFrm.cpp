@@ -1,14 +1,16 @@
 // MainFrm.cpp : implementation of the CMainFrame class
 //
 
+// clang-format off
 #include "stdafx.h"
 
 #include "mfc1.h"
 
 #include "MainFrm.h"
+// clang-format on
 
 #ifdef _DEBUG
-#define new DEBUG_NEW
+#  define new DEBUG_NEW
 #endif
 
 // CMainFrame
@@ -21,7 +23,9 @@ END_MESSAGE_MAP()
 
 static UINT indicators[] = {
   ID_SEPARATOR, // status line indicator
-  ID_INDICATOR_CAPS, ID_INDICATOR_NUM, ID_INDICATOR_SCRL,
+  ID_INDICATOR_CAPS,
+  ID_INDICATOR_NUM,
+  ID_INDICATOR_SCRL,
 };
 
 // CMainFrame construction/destruction
@@ -40,9 +44,10 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
   if (CMDIFrameWnd::OnCreate(lpCreateStruct) == -1)
     return -1;
 
-  if (!m_wndToolBar.CreateEx(this, TBSTYLE_FLAT, WS_CHILD | WS_VISIBLE |
-                               CBRS_TOP | CBRS_GRIPPER | CBRS_TOOLTIPS |
-                               CBRS_FLYBY | CBRS_SIZE_DYNAMIC) ||
+  if (!m_wndToolBar.CreateEx(this, TBSTYLE_FLAT,
+                             WS_CHILD | WS_VISIBLE | CBRS_TOP | CBRS_GRIPPER |
+                               CBRS_TOOLTIPS | CBRS_FLYBY |
+                               CBRS_SIZE_DYNAMIC) ||
       !m_wndToolBar.LoadToolBar(IDR_MAINFRAME)) {
     TRACE0("Failed to create toolbar\n");
     return -1; // fail to create

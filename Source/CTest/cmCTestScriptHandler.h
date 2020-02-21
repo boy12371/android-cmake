@@ -5,10 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCTestGenericHandler.h"
-
+#include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "cmCTestGenericHandler.h"
+#include "cmDuration.h"
 
 class cmCTest;
 class cmCTestCommand;
@@ -55,7 +58,7 @@ class cmake;
 class cmCTestScriptHandler : public cmCTestGenericHandler
 {
 public:
-  typedef cmCTestGenericHandler Superclass;
+  using Superclass = cmCTestGenericHandler;
 
   /**
    * Add a script to run, and if is should run in the current process
@@ -70,8 +73,8 @@ public:
   /*
    * Run a script
    */
-  static bool RunScript(cmCTest* ctest, const char* script, bool InProcess,
-                        int* returnValue);
+  static bool RunScript(cmCTest* ctest, cmMakefile* mf, const char* script,
+                        bool InProcess, int* returnValue);
   int RunCurrentScript();
 
   /*
@@ -93,9 +96,9 @@ public:
   /**
    * Return the time remaianing that the script is allowed to run in
    * seconds if the user has set the variable CTEST_TIME_LIMIT. If that has
-   * not been set it returns 1e7 seconds
+   * not been set it returns a very large value.
    */
-  double GetRemainingTimeAllowed();
+  cmDuration GetRemainingTimeAllowed();
 
   cmCTestScriptHandler();
   ~cmCTestScriptHandler() override;
@@ -104,6 +107,9 @@ public:
 
   void CreateCMake();
   cmake* GetCMake() { return this->CMake; }
+
+  void SetRunCurrentScript(bool value);
+
 private:
   // reads in a script
   int ReadInScript(const std::string& total_script_arg);
@@ -126,13 +132,16 @@ private:
   int RunConfigurationDashboard();
 
   // Add ctest command
-  void AddCTestCommand(std::string const& name, cmCTestCommand* command);
+  void AddCTestCommand(std::string const& name,
+                       std::unique_ptr<cmCTestCommand> command);
 
   // Try to remove the binary directory once
   static bool TryToRemoveBinaryDirectoryOnce(const std::string& directoryPath);
 
   std::vector<std::string> ConfigurationScripts;
   std::vector<bool> ScriptProcessScope;
+
+  bool ShouldRunCurrentScript;
 
   bool Backup;
   bool EmptyBinDir;
@@ -156,9 +165,10 @@ private:
   double ContinuousDuration;
 
   // what time in seconds did this script start running
-  double ScriptStartTime;
+  std::chrono::steady_clock::time_point ScriptStartTime;
 
   cmMakefile* Makefile;
+  cmMakefile* ParentMakefile;
   cmGlobalGenerator* GlobalGenerator;
   cmake* CMake;
 };

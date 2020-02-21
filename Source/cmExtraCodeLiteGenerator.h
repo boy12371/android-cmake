@@ -5,12 +5,12 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmExternalMakefileProjectGenerator.h"
-
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
+
+#include "cmExternalMakefileProjectGenerator.h"
 
 class cmLocalGenerator;
 class cmMakefile;
@@ -23,7 +23,7 @@ class cmExtraCodeLiteGenerator : public cmExternalMakefileProjectGenerator
 protected:
   std::string ConfigName;
   std::string WorkspacePath;
-  unsigned int CpuCount;
+  unsigned int CpuCount = 2;
 
 protected:
   std::string GetCodeLiteCompilerName(const cmMakefile* mf) const;

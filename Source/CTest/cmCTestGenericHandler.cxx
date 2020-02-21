@@ -18,15 +18,12 @@ cmCTestGenericHandler::cmCTestGenericHandler()
   this->TestLoad = 0;
 }
 
-cmCTestGenericHandler::~cmCTestGenericHandler()
-{
-}
+cmCTestGenericHandler::~cmCTestGenericHandler() = default;
 
 void cmCTestGenericHandler::SetOption(const std::string& op, const char* value)
 {
   if (!value) {
-    cmCTestGenericHandler::t_StringToString::iterator remit =
-      this->Options.find(op);
+    auto remit = this->Options.find(op);
     if (remit != this->Options.end()) {
       this->Options.erase(remit);
     }
@@ -41,8 +38,7 @@ void cmCTestGenericHandler::SetPersistentOption(const std::string& op,
 {
   this->SetOption(op, value);
   if (!value) {
-    cmCTestGenericHandler::t_StringToString::iterator remit =
-      this->PersistentOptions.find(op);
+    auto remit = this->PersistentOptions.find(op);
     if (remit != this->PersistentOptions.end()) {
       this->PersistentOptions.erase(remit);
     }
@@ -64,8 +60,7 @@ void cmCTestGenericHandler::Initialize()
 
 const char* cmCTestGenericHandler::GetOption(const std::string& op)
 {
-  cmCTestGenericHandler::t_StringToString::iterator remit =
-    this->Options.find(op);
+  auto remit = this->Options.find(op);
   if (remit == this->Options.end()) {
     return nullptr;
   }
@@ -100,8 +95,9 @@ bool cmCTestGenericHandler::StartResultingXML(cmCTest::Part part,
   }
   if (!this->CTest->OpenOutputFile(this->CTest->GetCurrentTag(), ostr.str(),
                                    xofs, true)) {
-    cmCTestLog(this->CTest, ERROR_MESSAGE, "Cannot create resulting XML file: "
-                 << ostr.str() << std::endl);
+    cmCTestLog(this->CTest, ERROR_MESSAGE,
+               "Cannot create resulting XML file: " << ostr.str()
+                                                    << std::endl);
     return false;
   }
   this->CTest->AddSubmitFile(part, ostr.str().c_str());

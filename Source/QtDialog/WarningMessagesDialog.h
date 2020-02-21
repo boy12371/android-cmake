@@ -3,16 +3,18 @@
 #ifndef WarningMessagesDialog_h
 #define WarningMessagesDialog_h
 
+#include "QCMake.h"
 #include <QDialog>
 #include <QWidget>
 
-#include "QCMake.h"
 #include "ui_WarningMessagesDialog.h"
 
 /**
  * Dialog window for setting the warning message related options.
  */
-class WarningMessagesDialog : public QDialog, public Ui_MessagesDialog
+class WarningMessagesDialog
+  : public QDialog
+  , public Ui_MessagesDialog
 {
   Q_OBJECT
 

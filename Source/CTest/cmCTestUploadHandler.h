@@ -5,7 +5,9 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCTest.h"
+#include <set>
+#include <string>
+
 #include "cmCTestGenericHandler.h"
 
 /** \class cmCTestUploadHandler
@@ -17,10 +19,9 @@
 class cmCTestUploadHandler : public cmCTestGenericHandler
 {
 public:
-  typedef cmCTestGenericHandler Superclass;
+  using Superclass = cmCTestGenericHandler;
 
   cmCTestUploadHandler();
-  ~cmCTestUploadHandler() override {}
 
   /*
    * The main entry point for this class
@@ -30,10 +31,10 @@ public:
   void Initialize() override;
 
   /** Specify a set of files to submit.  */
-  void SetFiles(cmCTest::SetOfStrings const& files);
+  void SetFiles(std::set<std::string> const& files);
 
 private:
-  cmCTest::SetOfStrings Files;
+  std::set<std::string> Files;
 };
 
 #endif

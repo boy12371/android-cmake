@@ -4,13 +4,13 @@
 #define cmCustomCommandGenerator_h
 
 #include "cmConfigure.h" // IWYU pragma: keep
-#include "cmCustomCommandLines.h"
 
 #include <string>
 #include <vector>
 
+#include "cmCustomCommandLines.h"
+
 class cmCustomCommand;
-class cmGeneratorExpression;
 class cmLocalGenerator;
 
 class cmCustomCommandGenerator
@@ -20,17 +20,22 @@ class cmCustomCommandGenerator
   cmLocalGenerator* LG;
   bool OldStyle;
   bool MakeVars;
-  cmGeneratorExpression* GE;
   cmCustomCommandLines CommandLines;
+  std::vector<std::vector<std::string>> EmulatorsWithArguments;
+  std::vector<std::string> Byproducts;
   std::vector<std::string> Depends;
+  std::string WorkingDirectory;
 
-  const char* GetCrossCompilingEmulator(unsigned int c) const;
+  void FillEmulatorsWithArguments();
+  std::vector<std::string> GetCrossCompilingEmulator(unsigned int c) const;
   const char* GetArgv0Location(unsigned int c) const;
 
 public:
-  cmCustomCommandGenerator(cmCustomCommand const& cc,
-                           const std::string& config, cmLocalGenerator* lg);
-  ~cmCustomCommandGenerator();
+  cmCustomCommandGenerator(cmCustomCommand const& cc, std::string config,
+                           cmLocalGenerator* lg);
+  cmCustomCommandGenerator(const cmCustomCommandGenerator&) = delete;
+  cmCustomCommandGenerator& operator=(const cmCustomCommandGenerator&) =
+    delete;
   cmCustomCommand const& GetCC() const { return this->CC; }
   unsigned int GetNumberOfCommands() const;
   std::string GetCommand(unsigned int c) const;

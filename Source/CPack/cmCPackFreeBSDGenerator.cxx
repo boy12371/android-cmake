@@ -6,20 +6,22 @@
 #include "cmCPackArchiveGenerator.h"
 #include "cmCPackLog.h"
 #include "cmGeneratedFileStream.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
 // Needed for ::open() and ::stat()
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <algorithm>
+#include <ostream>
+#include <utility>
+#include <vector>
 
+#include <fcntl.h>
 #include <pkg.h>
 
-#include <algorithm>
+#include <sys/stat.h>
 
 cmCPackFreeBSDGenerator::cmCPackFreeBSDGenerator()
-  : cmCPackArchiveGenerator(cmArchiveWrite::CompressXZ, "paxr")
+  : cmCPackArchiveGenerator(cmArchiveWrite::CompressXZ, "paxr", ".txz")
 {
 }
 
@@ -30,9 +32,7 @@ int cmCPackFreeBSDGenerator::InitializeInternal()
   return this->Superclass::InitializeInternal();
 }
 
-cmCPackFreeBSDGenerator::~cmCPackFreeBSDGenerator()
-{
-}
+cmCPackFreeBSDGenerator::~cmCPackFreeBSDGenerator() = default;
 
 // This is a wrapper, for use only in stream-based output,
 // that will output a string in UCL escaped fashion (in particular,
@@ -55,8 +55,7 @@ cmGeneratedFileStream& operator<<(cmGeneratedFileStream& s,
                                   const EscapeQuotes& v)
 {
   s << '"';
-  for (std::string::size_type i = 0; i < v.value.length(); ++i) {
-    char c = v.value[i];
+  for (char c : v.value) {
     switch (c) {
       case '\n':
         s << "\\n";
@@ -98,12 +97,12 @@ class ManifestKey
 public:
   std::string key;
 
-  ManifestKey(const std::string& k)
-    : key(k)
+  ManifestKey(std::string k)
+    : key(std::move(k))
   {
   }
 
-  virtual ~ManifestKey() {}
+  virtual ~ManifestKey() = default;
 
   // Output the value associated with this key to the stream @p s.
   // Format is to be decided by subclasses.
@@ -116,9 +115,9 @@ class ManifestKeyValue : public ManifestKey
 public:
   std::string value;
 
-  ManifestKeyValue(const std::string& k, const std::string& v)
+  ManifestKeyValue(const std::string& k, std::string v)
     : ManifestKey(k)
-    , value(v)
+    , value(std::move(v))
   {
   }
 
@@ -132,7 +131,7 @@ public:
 class ManifestKeyListValue : public ManifestKey
 {
 public:
-  typedef std::vector<std::string> VList;
+  using VList = std::vector<std::string>;
   VList value;
 
   ManifestKeyListValue(const std::string& k)
@@ -148,8 +147,8 @@ public:
 
   ManifestKeyListValue& operator<<(const std::vector<std::string>& v)
   {
-    for (VList::const_iterator it = v.begin(); it != v.end(); ++it) {
-      (*this) << (*it);
+    for (std::string const& e : v) {
+      (*this) << e;
     }
     return *this;
   }
@@ -159,9 +158,9 @@ public:
     bool with_comma = false;
 
     s << '[';
-    for (VList::const_iterator it = value.begin(); it != value.end(); ++it) {
+    for (std::string const& elem : value) {
       s << (with_comma ? ',' : ' ');
-      s << EscapeQuotes(*it);
+      s << EscapeQuotes(elem);
       with_comma = true;
     }
     s << " ]";
@@ -182,8 +181,8 @@ public:
   void write_value(cmGeneratedFileStream& s) const override
   {
     s << "{\n";
-    for (VList::const_iterator it = value.begin(); it != value.end(); ++it) {
-      s << "  \"" << *it << "\": {\"origin\": \"" << *it << "\"},\n";
+    for (std::string const& elem : value) {
+      s << "  \"" << elem << R"(": {"origin": ")" << elem << "\"},\n";
     }
     s << '}';
   }
@@ -206,9 +205,8 @@ std::string cmCPackFreeBSDGenerator::var_lookup(const char* var_name)
   const char* pv = this->GetOption(var_name);
   if (!pv) {
     return std::string();
-  } else {
-    return pv;
   }
+  return pv;
 }
 
 // Produce UCL in the given @p manifest file for the common
@@ -230,26 +228,23 @@ void cmCPackFreeBSDGenerator::write_manifest_fields(
   manifest << ManifestKeyValue(
     "desc", var_lookup("CPACK_FREEBSD_PACKAGE_DESCRIPTION"));
   manifest << ManifestKeyValue("www", var_lookup("CPACK_FREEBSD_PACKAGE_WWW"));
-  std::vector<std::string> licenses;
-  cmSystemTools::ExpandListArgument(
-    var_lookup("CPACK_FREEBSD_PACKAGE_LICENSE"), licenses);
+  std::vector<std::string> licenses =
+    cmExpandedList(var_lookup("CPACK_FREEBSD_PACKAGE_LICENSE"));
   std::string licenselogic("single");
-  if (licenses.size() < 1) {
+  if (licenses.empty()) {
     cmSystemTools::SetFatalErrorOccured();
   } else if (licenses.size() > 1) {
     licenselogic = var_lookup("CPACK_FREEBSD_PACKAGE_LICENSE_LOGIC");
   }
   manifest << ManifestKeyValue("licenselogic", licenselogic);
   manifest << (ManifestKeyListValue("licenses") << licenses);
-  std::vector<std::string> categories;
-  cmSystemTools::ExpandListArgument(
-    var_lookup("CPACK_FREEBSD_PACKAGE_CATEGORIES"), categories);
+  std::vector<std::string> categories =
+    cmExpandedList(var_lookup("CPACK_FREEBSD_PACKAGE_CATEGORIES"));
   manifest << (ManifestKeyListValue("categories") << categories);
   manifest << ManifestKeyValue("prefix", var_lookup("CMAKE_INSTALL_PREFIX"));
-  std::vector<std::string> deps;
-  cmSystemTools::ExpandListArgument(var_lookup("CPACK_FREEBSD_PACKAGE_DEPS"),
-                                    deps);
-  if (deps.size() > 0) {
+  std::vector<std::string> deps =
+    cmExpandedList(var_lookup("CPACK_FREEBSD_PACKAGE_DEPS"));
+  if (!deps.empty()) {
     manifest << (ManifestKeyDepsValue("deps") << deps);
   }
 }
@@ -259,13 +254,8 @@ void cmCPackFreeBSDGenerator::write_manifest_fields(
 static bool ignore_file(const std::string& filename)
 {
   struct stat statbuf;
-
-  if (!((stat(filename.c_str(), &statbuf) >= 0) &&
-        ((statbuf.st_mode & S_IFMT) == S_IFREG))) {
-    return true;
-  }
-  // May be other reasons to return false
-  return false;
+  return stat(filename.c_str(), &statbuf) < 0 ||
+    (statbuf.st_mode & S_IFMT) != S_IFREG;
 }
 
 // Write the given list of @p files to the manifest stream @p s,
@@ -277,28 +267,18 @@ void write_manifest_files(cmGeneratedFileStream& s,
                           const std::string& toplevel,
                           const std::vector<std::string>& files)
 {
-  const char* c_toplevel = toplevel.c_str();
-  std::vector<std::string>::const_iterator it;
-
   s << "\"files\": {\n";
-  for (it = files.begin(); it != files.end(); ++it) {
-    s << "  \"/" << cmSystemTools::RelativePath(c_toplevel, it->c_str())
-      << "\": \""
+  for (std::string const& file : files) {
+    s << "  \"/" << cmSystemTools::RelativePath(toplevel, file) << "\": \""
       << "<sha256>"
       << "\",\n";
   }
   s << "  },\n";
 }
 
-static bool has_suffix(const std::string& str, const std::string& suffix)
-{
-  return str.size() >= suffix.size() &&
-    str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
 int cmCPackFreeBSDGenerator::PackageFiles()
 {
-  if (!this->ReadListFile("CPackFreeBSD.cmake")) {
+  if (!this->ReadListFile("Internal/CPack/CPackFreeBSD.cmake")) {
     cmCPackLogger(cmCPackLog::LOG_ERROR,
                   "Error while execution CPackFreeBSD.cmake" << std::endl);
     return 0;
@@ -313,7 +293,7 @@ int cmCPackFreeBSDGenerator::PackageFiles()
 
   std::string manifestname = toplevel + "/+MANIFEST";
   {
-    cmGeneratedFileStream manifest(manifestname.c_str());
+    cmGeneratedFileStream manifest(manifestname);
     manifest << "{\n";
     write_manifest_fields(manifest);
     write_manifest_files(manifest, toplevel, files);
@@ -337,19 +317,17 @@ int cmCPackFreeBSDGenerator::PackageFiles()
                              ONE_PACKAGE_PER_COMPONENT);
   }
 
-  std::string output_dir =
-    cmSystemTools::CollapseCombinedPath(toplevel, "../");
+  std::string output_dir = cmSystemTools::CollapseFullPath("../", toplevel);
   pkg_create_from_manifest(output_dir.c_str(), ::TXZ, toplevel.c_str(),
-                           manifestname.c_str(), NULL);
+                           manifestname.c_str(), nullptr);
 
-  std::string broken_suffix = std::string("-") +
-    var_lookup("CPACK_TOPLEVEL_TAG") + std::string(GetOutputExtension());
-  for (std::vector<std::string>::iterator it = packageFileNames.begin();
-       it != packageFileNames.end(); ++it) {
-    cmCPackLogger(cmCPackLog::LOG_DEBUG, "Packagefile " << *it << std::endl);
-    if (has_suffix(*it, broken_suffix)) {
-      it->replace(it->size() - broken_suffix.size(), std::string::npos,
-                  GetOutputExtension());
+  std::string broken_suffix =
+    cmStrCat('-', var_lookup("CPACK_TOPLEVEL_TAG"), ".txz");
+  for (std::string& name : packageFileNames) {
+    cmCPackLogger(cmCPackLog::LOG_DEBUG, "Packagefile " << name << std::endl);
+    if (cmHasSuffix(name, broken_suffix)) {
+      name.replace(name.size() - broken_suffix.size(), std::string::npos,
+                   ".txz");
       break;
     }
   }

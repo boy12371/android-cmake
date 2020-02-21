@@ -4,14 +4,15 @@
 #define AddCacheEntry_h
 
 #include "QCMake.h"
-
 #include <QCheckBox>
 #include <QStringList>
 #include <QWidget>
 
 #include "ui_AddCacheEntry.h"
 
-class AddCacheEntry : public QWidget, public Ui::AddCacheEntry
+class AddCacheEntry
+  : public QWidget
+  , public Ui::AddCacheEntry
 {
   Q_OBJECT
 public:

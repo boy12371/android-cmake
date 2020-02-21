@@ -8,19 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "cmCommand.h"
-
 class cmExecutionStatus;
 
-class cmUseMangledMesaCommand : public cmCommand
-{
-public:
-  cmCommand* Clone() override { return new cmUseMangledMesaCommand; }
-  bool InitialPass(std::vector<std::string> const& args,
-                   cmExecutionStatus& status) override;
-
-protected:
-  void CopyAndFullPathMesaHeader(const char* source, const char* outdir);
-};
+bool cmUseMangledMesaCommand(std::vector<std::string> const& args,
+                             cmExecutionStatus& status);
 
 #endif

@@ -46,6 +46,7 @@ void uv__async_stop(uv_loop_t* loop) {
 }
 
 void uv__work_submit(uv_loop_t* loop, struct uv__work* w,
+                     enum uv__work_kind kind,
                      void (*work)(struct uv__work* w),
                      void (*done)(struct uv__work* w, int status)) {
   abort();
@@ -133,6 +134,15 @@ ssize_t uv__pwritev(int fd, const struct iovec *iov, int iovcnt,
 
 int uv__utimesat(int dirfd, const char* path, const struct timespec times[2],
                  int flags) {
+  errno = ENOSYS;
+  return -1;
+}
+
+int uv__statx(int dirfd,
+              const char* path,
+              int flags,
+              unsigned int mask,
+              struct uv__statx* statxbuf) {
   errno = ENOSYS;
   return -1;
 }

@@ -6,13 +6,15 @@
 
 #include <string>
 
-#include "cmConnection.h"
 #include "cm_uv.h"
+
+#include "cmConnection.h"
+#include "cmUVHandlePtr.h"
 
 class cmPipeConnection : public cmEventBasedConnection
 {
 public:
-  cmPipeConnection(const std::string& name,
+  cmPipeConnection(std::string name,
                    cmConnectionBufferStrategy* bufferStrategy = nullptr);
 
   bool OnServeStart(std::string* pString) override;
@@ -23,6 +25,5 @@ public:
 
 private:
   const std::string PipeName;
-  uv_pipe_t* ServerPipe = nullptr;
-  uv_pipe_t* ClientPipe = nullptr;
+  cm::uv_pipe_ptr ServerPipe;
 };

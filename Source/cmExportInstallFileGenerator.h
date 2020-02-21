@@ -5,18 +5,21 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmExportFileGenerator.h"
-
 #include <iosfwd>
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include "cmExportFileGenerator.h"
+#include "cmStateTypes.h"
 
 class cmGeneratorTarget;
 class cmGlobalGenerator;
 class cmInstallExportGenerator;
 class cmInstallTargetGenerator;
+class cmTargetExport;
 
 /** \class cmExportInstallFileGenerator
  * \brief Generate a file exporting targets from an install tree.
@@ -39,7 +42,7 @@ public:
       files.  */
   cmExportInstallFileGenerator(cmInstallExportGenerator* iegen);
 
-  /** Get the per-config file generated for each configuraiton.  This
+  /** Get the per-config file generated for each configuration.  This
       maps from the configuration name to the file temporary location
       for installation.  */
   std::map<std::string, std::string> const& GetConfigImportFiles()
@@ -57,6 +60,8 @@ protected:
   void GenerateImportTargetsConfig(
     std::ostream& os, const std::string& config, std::string const& suffix,
     std::vector<std::string>& missingTargets) override;
+  cmStateEnums::TargetType GetExportTargetType(
+    cmTargetExport const* targetExport) const;
   void HandleMissingTarget(std::string& link_libs,
                            std::vector<std::string>& missingTargets,
                            cmGeneratorTarget* depender,
@@ -66,10 +71,10 @@ protected:
 
   void ComplainAboutMissingTarget(cmGeneratorTarget* depender,
                                   cmGeneratorTarget* dependee,
-                                  int occurrences);
+                                  std::vector<std::string> const& exportFiles);
 
-  std::vector<std::string> FindNamespaces(cmGlobalGenerator* gg,
-                                          const std::string& name);
+  std::pair<std::vector<std::string>, std::string> FindNamespaces(
+    cmGlobalGenerator* gg, const std::string& name);
 
   /** Generate the relative import prefix.  */
   virtual void GenerateImportPrefix(std::ostream&);

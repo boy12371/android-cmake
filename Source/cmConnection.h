@@ -5,11 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cm_uv.h"
-
 #include <cstddef>
 #include <memory>
 #include <string>
+
+#include "cm_uv.h"
+
+#include "cmUVHandlePtr.h"
 
 class cmServerBase;
 
@@ -59,10 +61,11 @@ public:
 
 class cmConnection
 {
-  CM_DISABLE_COPY(cmConnection)
-
 public:
-  cmConnection() {}
+  cmConnection() = default;
+
+  cmConnection(cmConnection const&) = delete;
+  cmConnection& operator=(cmConnection const&) = delete;
 
   virtual void WriteData(const std::string& data) = 0;
 
@@ -107,8 +110,6 @@ public:
   bool OnConnectionShuttingDown() override;
 
   virtual void OnDisconnect(int errorCode);
-  uv_stream_t* ReadStream = nullptr;
-  uv_stream_t* WriteStream = nullptr;
 
   static void on_close(uv_handle_t* handle);
 
@@ -119,6 +120,8 @@ public:
   }
 
 protected:
+  cm::uv_stream_ptr WriteStream;
+
   std::string RawReadBuffer;
 
   std::unique_ptr<cmConnectionBufferStrategy> BufferStrategy;

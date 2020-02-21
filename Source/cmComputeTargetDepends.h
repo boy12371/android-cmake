@@ -5,12 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmGraphAdjacencyList.h"
-
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
+
+#include "cmGraphAdjacencyList.h"
+#include "cmListFileCache.h"
 
 class cmComputeComponentGraph;
 class cmGeneratorTarget;
@@ -47,15 +48,17 @@ private:
   void AddTargetDepend(int depender_index, cmLinkItem const& dependee_name,
                        bool linking);
   void AddTargetDepend(int depender_index, cmGeneratorTarget const* dependee,
+                       cmListFileBacktrace const& dependee_backtrace,
                        bool linking);
   bool ComputeFinalDepends(cmComputeComponentGraph const& ccg);
   void AddInterfaceDepends(int depender_index, cmLinkItem const& dependee_name,
                            const std::string& config,
-                           std::set<std::string>& emitted);
+                           std::set<cmLinkItem>& emitted);
   void AddInterfaceDepends(int depender_index,
                            cmGeneratorTarget const* dependee,
+                           cmListFileBacktrace const& dependee_backtrace,
                            const std::string& config,
-                           std::set<std::string>& emitted);
+                           std::set<cmLinkItem>& emitted);
   cmGlobalGenerator* GlobalGenerator;
   bool DebugMode;
   bool NoCycles;
@@ -67,9 +70,9 @@ private:
   // Represent the target dependency graph.  The entry at each
   // top-level index corresponds to a depender whose dependencies are
   // listed.
-  typedef cmGraphNodeList NodeList;
-  typedef cmGraphEdgeList EdgeList;
-  typedef cmGraphAdjacencyList Graph;
+  using NodeList = cmGraphNodeList;
+  using EdgeList = cmGraphEdgeList;
+  using Graph = cmGraphAdjacencyList;
   Graph InitialGraph;
   Graph FinalGraph;
   void DisplayGraph(Graph const& graph, const std::string& name);

@@ -2,13 +2,13 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCursesLongMessageForm.h"
 
+#include <cstdio>
+#include <cstring>
+
 #include "cmCursesForm.h"
 #include "cmCursesMainForm.h"
 #include "cmCursesStandardIncludes.h"
 #include "cmVersion.h"
-
-#include <stdio.h>
-#include <string.h>
 
 inline int ctrl(int z)
 {
@@ -19,9 +19,8 @@ cmCursesLongMessageForm::cmCursesLongMessageForm(
   std::vector<std::string> const& messages, const char* title)
 {
   // Append all messages into on big string
-  std::vector<std::string>::const_iterator it;
-  for (it = messages.begin(); it != messages.end(); it++) {
-    this->Messages += (*it);
+  for (std::string const& message : messages) {
+    this->Messages += message;
     // Add one blank line after each message
     this->Messages += "\n\n";
   }
@@ -39,11 +38,12 @@ cmCursesLongMessageForm::~cmCursesLongMessageForm()
 
 void cmCursesLongMessageForm::UpdateStatusBar()
 {
-  int x, y;
+  int x;
+  int y;
   getmaxyx(stdscr, y, x);
 
   char bar[cmCursesMainForm::MAX_WIDTH];
-  size_t size = strlen(this->Title.c_str());
+  size_t size = this->Title.size();
   if (size >= cmCursesMainForm::MAX_WIDTH) {
     size = cmCursesMainForm::MAX_WIDTH - 1;
   }
@@ -82,7 +82,8 @@ void cmCursesLongMessageForm::UpdateStatusBar()
 
 void cmCursesLongMessageForm::PrintKeys()
 {
-  int x, y;
+  int x;
+  int y;
   getmaxyx(stdscr, y, x);
   if (x < cmCursesMainForm::MIN_WIDTH || y < cmCursesMainForm::MIN_HEIGHT) {
     return;
@@ -99,7 +100,8 @@ void cmCursesLongMessageForm::PrintKeys()
 void cmCursesLongMessageForm::Render(int /*left*/, int /*top*/, int /*width*/,
                                      int /*height*/)
 {
-  int x, y;
+  int x;
+  int y;
   getmaxyx(stdscr, y, x);
 
   if (this->Form) {

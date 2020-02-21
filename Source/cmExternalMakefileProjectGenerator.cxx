@@ -2,6 +2,10 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmExternalMakefileProjectGenerator.h"
 
+#include <utility>
+
+#include "cmStringAlgorithms.h"
+
 class cmMakefile;
 
 void cmExternalMakefileProjectGenerator::EnableLanguage(
@@ -16,26 +20,29 @@ std::string cmExternalMakefileProjectGenerator::CreateFullGeneratorName(
   std::string fullName;
   if (!globalGenerator.empty()) {
     if (!extraGenerator.empty()) {
-      fullName = extraGenerator;
-      fullName += " - ";
+      fullName = cmStrCat(extraGenerator, " - ");
     }
     fullName += globalGenerator;
   }
   return fullName;
 }
 
+bool cmExternalMakefileProjectGenerator::Open(
+  const std::string& /*bindir*/, const std::string& /*projectName*/,
+  bool /*dryRun*/)
+{
+  return false;
+}
+
 cmExternalMakefileProjectGeneratorFactory::
-  cmExternalMakefileProjectGeneratorFactory(const std::string& n,
-                                            const std::string& doc)
-  : Name(n)
-  , Documentation(doc)
+  cmExternalMakefileProjectGeneratorFactory(std::string n, std::string doc)
+  : Name(std::move(n))
+  , Documentation(std::move(doc))
 {
 }
 
 cmExternalMakefileProjectGeneratorFactory::
-  ~cmExternalMakefileProjectGeneratorFactory()
-{
-}
+  ~cmExternalMakefileProjectGeneratorFactory() = default;
 
 std::string cmExternalMakefileProjectGeneratorFactory::GetName() const
 {

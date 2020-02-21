@@ -5,17 +5,22 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCTestGenericHandler.h"
-
-#include "cmProcessOutput.h"
-#include "cmsys/RegularExpression.hxx"
+#include <chrono>
 #include <deque>
 #include <iosfwd>
-#include <stddef.h>
 #include <string>
 #include <vector>
 
+#include <stddef.h>
+
+#include "cmsys/RegularExpression.hxx"
+
+#include "cmCTestGenericHandler.h"
+#include "cmDuration.h"
+#include "cmProcessOutput.h"
+
 class cmMakefile;
+class cmStringReplaceHelper;
 class cmXMLWriter;
 
 /** \class cmCTestBuildHandler
@@ -25,8 +30,8 @@ class cmXMLWriter;
 class cmCTestBuildHandler : public cmCTestGenericHandler
 {
 public:
-  typedef cmCTestGenericHandler Superclass;
-  typedef cmProcessOutput::Encoding Encoding;
+  using Superclass = cmCTestGenericHandler;
+  using Encoding = cmProcessOutput::Encoding;
 
   /*
    * The main entry point for this class
@@ -50,7 +55,7 @@ private:
 
   //! Run command specialized for make and configure. Returns process status
   // and retVal is return value or exception.
-  int RunMakeCommand(const char* command, int* retVal, const char* dir,
+  int RunMakeCommand(const std::string& command, int* retVal, const char* dir,
                      int timeout, std::ostream& ofs,
                      Encoding encoding = cmProcessOutput::Auto);
 
@@ -86,14 +91,14 @@ private:
   void GenerateXMLHeader(cmXMLWriter& xml);
   void GenerateXMLLaunched(cmXMLWriter& xml);
   void GenerateXMLLogScraped(cmXMLWriter& xml);
-  void GenerateXMLFooter(cmXMLWriter& xml, double elapsed_build_time);
+  void GenerateXMLFooter(cmXMLWriter& xml, cmDuration elapsed_build_time);
   bool IsLaunchedErrorFile(const char* fname);
   bool IsLaunchedWarningFile(const char* fname);
 
   std::string StartBuild;
   std::string EndBuild;
-  double StartBuildTime;
-  double EndBuildTime;
+  std::chrono::system_clock::time_point StartBuildTime;
+  std::chrono::system_clock::time_point EndBuildTime;
 
   std::vector<std::string> CustomErrorMatches;
   std::vector<std::string> CustomErrorExceptions;
@@ -108,7 +113,7 @@ private:
   std::vector<cmsys::RegularExpression> WarningMatchRegex;
   std::vector<cmsys::RegularExpression> WarningExceptionRegex;
 
-  typedef std::deque<char> t_BuildProcessingQueueType;
+  using t_BuildProcessingQueueType = std::deque<char>;
 
   void ProcessBuffer(const char* data, size_t length, size_t& tick,
                      size_t tick_len, std::ostream& ofs,
@@ -123,7 +128,7 @@ private:
   std::string SimplifySourceDir;
   std::string SimplifyBuildDir;
   size_t OutputLineCounter;
-  typedef std::vector<cmCTestBuildErrorWarning> t_ErrorsAndWarningsVector;
+  using t_ErrorsAndWarningsVector = std::vector<cmCTestBuildErrorWarning>;
   t_ErrorsAndWarningsVector ErrorsAndWarnings;
   t_ErrorsAndWarningsVector::iterator LastErrorOrWarning;
   size_t PostContextCount;
@@ -140,6 +145,9 @@ private:
 
   int MaxErrors;
   int MaxWarnings;
+
+  // Used to remove ANSI color codes before checking for errors and warnings.
+  cmStringReplaceHelper* ColorRemover;
 
   bool UseCTestLaunch;
   std::string CTestLaunchDir;

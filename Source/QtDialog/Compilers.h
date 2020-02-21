@@ -5,11 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include <QWidget>
-
 #include <ui_Compilers.h>
 
-class Compilers : public QWidget, public Ui::Compilers
+#include <QWidget>
+
+class Compilers
+  : public QWidget
+  , public Ui::Compilers
 {
   Q_OBJECT
 public:

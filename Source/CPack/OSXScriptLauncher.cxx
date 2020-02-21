@@ -1,14 +1,15 @@
 /* Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
    file Copyright.txt or https://cmake.org/licensing for details.  */
-#include "cmsys/FStream.hxx"
-#include "cmsys/Process.h"
-#include "cmsys/SystemTools.hxx"
+#include <cstddef>
 #include <iostream>
-#include <stddef.h>
 #include <string>
 #include <vector>
 
 #include <CoreFoundation/CoreFoundation.h>
+
+#include "cmsys/FStream.hxx"
+#include "cmsys/Process.h"
+#include "cmsys/SystemTools.hxx"
 
 // For the PATH_MAX constant
 #include <sys/syslimits.h>
@@ -46,8 +47,7 @@ int main(int argc, char* argv[])
 
   // get the file system path of the url as a cstring
   // in an encoding suitable for posix apis
-  if (CFURLGetFileSystemRepresentation(scriptFileURL, true, path, PATH_MAX) ==
-      false) {
+  if (!CFURLGetFileSystemRepresentation(scriptFileURL, true, path, PATH_MAX)) {
     DebugError("CFURLGetFileSystemRepresentation failed");
     return 1;
   }
@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
   args.push_back(nullptr);
 
   cmsysProcess* cp = cmsysProcess_New();
-  cmsysProcess_SetCommand(cp, &*args.begin());
+  cmsysProcess_SetCommand(cp, args.data());
   cmsysProcess_SetWorkingDirectory(cp, scriptDirectory.c_str());
   cmsysProcess_SetOption(cp, cmsysProcess_Option_HideWindow, 1);
   cmsysProcess_SetTimeout(cp, 0);

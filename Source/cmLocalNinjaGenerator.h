@@ -23,7 +23,6 @@ class cmGlobalGenerator;
 class cmGlobalNinjaGenerator;
 class cmMakefile;
 class cmRulePlaceholderExpander;
-class cmSourceFile;
 class cmake;
 
 /**
@@ -60,7 +59,10 @@ public:
     return this->HomeRelativeOutputPath;
   }
 
-  std::string BuildCommandLine(const std::vector<std::string>& cmdLines);
+  std::string BuildCommandLine(
+    std::vector<std::string> const& cmdLines,
+    std::string const& customStep = std::string(),
+    cmGeneratorTarget const* target = nullptr) const;
 
   void AppendTargetOutputs(cmGeneratorTarget* target, cmNinjaDeps& outputs);
   void AppendTargetDepends(
@@ -73,10 +75,6 @@ public:
                                 std::vector<std::string>& cmdLines);
   void AppendCustomCommandDeps(cmCustomCommandGenerator const& ccg,
                                cmNinjaDeps& ninjaDeps);
-
-  void ComputeObjectFilenames(
-    std::map<cmSourceFile const*, std::string>& mapping,
-    cmGeneratorTarget const* gt = nullptr) override;
 
 protected:
   std::string ConvertToIncludeReference(
@@ -95,7 +93,6 @@ private:
   void WriteProcessedMakefile(std::ostream& os);
   void WritePools(std::ostream& os);
 
-  void WriteCustomCommandRule();
   void WriteCustomCommandBuildStatement(cmCustomCommand const* cc,
                                         const cmNinjaDeps& orderOnlyDeps);
 
@@ -103,10 +100,16 @@ private:
 
   std::string MakeCustomLauncher(cmCustomCommandGenerator const& ccg);
 
+  std::string WriteCommandScript(std::vector<std::string> const& cmdLines,
+                                 std::string const& customStep,
+                                 cmGeneratorTarget const* target) const;
+
+  void AdditionalCleanFiles();
+
   std::string HomeRelativeOutputPath;
 
-  typedef std::map<cmCustomCommand const*, std::set<cmGeneratorTarget*>>
-    CustomCommandTargetMap;
+  using CustomCommandTargetMap =
+    std::map<cmCustomCommand const*, std::set<cmGeneratorTarget*>>;
   CustomCommandTargetMap CustomCommandTargets;
   std::vector<cmCustomCommand const*> CustomCommands;
 };

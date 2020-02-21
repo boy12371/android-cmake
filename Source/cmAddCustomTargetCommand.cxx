@@ -2,37 +2,37 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmAddCustomTargetCommand.h"
 
-#include <sstream>
+#include <utility>
 
+#include "cmCheckCustomOutputs.h"
 #include "cmCustomCommandLines.h"
+#include "cmCustomCommandTypes.h"
+#include "cmExecutionStatus.h"
 #include "cmGeneratorExpression.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
-#include "cmPolicies.h"
+#include "cmMessageType.h"
+#include "cmStateTypes.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
-#include "cmake.h"
 
-class cmExecutionStatus;
-
-// cmAddCustomTargetCommand
-bool cmAddCustomTargetCommand::InitialPass(
-  std::vector<std::string> const& args, cmExecutionStatus&)
+bool cmAddCustomTargetCommand(std::vector<std::string> const& args,
+                              cmExecutionStatus& status)
 {
   if (args.empty()) {
-    this->SetError("called with incorrect number of arguments");
+    status.SetError("called with incorrect number of arguments");
     return false;
   }
 
+  cmMakefile& mf = status.GetMakefile();
   std::string const& targetName = args[0];
 
   // Check the target name.
   if (targetName.find_first_of("/\\") != std::string::npos) {
-    std::ostringstream e;
-    e << "called with invalid target name \"" << targetName
-      << "\".  Target names may not contain a slash.  "
-      << "Use ADD_CUSTOM_COMMAND to generate files.";
-    this->SetError(e.str());
+    status.SetError(cmStrCat("called with invalid target name \"", targetName,
+                             "\".  Target names may not contain a slash.  "
+                             "Use ADD_CUSTOM_COMMAND to generate files."));
     return false;
   }
 
@@ -43,7 +43,8 @@ bool cmAddCustomTargetCommand::InitialPass(
   cmCustomCommandLines commandLines;
 
   // Accumulate dependencies.
-  std::vector<std::string> depends, byproducts;
+  std::vector<std::string> depends;
+  std::vector<std::string> byproducts;
   std::string working_directory;
   bool verbatim = false;
   bool uses_terminal = false;
@@ -51,6 +52,7 @@ bool cmAddCustomTargetCommand::InitialPass(
   std::string comment_buffer;
   const char* comment = nullptr;
   std::vector<std::string> sources;
+  std::string job_pool;
 
   // Keep track of parser state.
   enum tdoing
@@ -61,6 +63,7 @@ bool cmAddCustomTargetCommand::InitialPass(
     doing_working_directory,
     doing_comment,
     doing_source,
+    doing_job_pool,
     doing_nothing
   };
   tdoing doing = doing_command;
@@ -96,6 +99,8 @@ bool cmAddCustomTargetCommand::InitialPass(
       command_expand_lists = true;
     } else if (copy == "COMMENT") {
       doing = doing_comment;
+    } else if (copy == "JOB_POOL") {
+      doing = doing_job_pool;
     } else if (copy == "COMMAND") {
       doing = doing_command;
 
@@ -116,18 +121,17 @@ bool cmAddCustomTargetCommand::InitialPass(
           break;
         case doing_byproducts: {
           std::string filename;
-          if (!cmSystemTools::FileIsFullPath(copy.c_str())) {
-            filename = this->Makefile->GetCurrentBinaryDirectory();
-            filename += "/";
+          if (!cmSystemTools::FileIsFullPath(copy)) {
+            filename = cmStrCat(mf.GetCurrentBinaryDirectory(), '/');
           }
           filename += copy;
           cmSystemTools::ConvertToUnixSlashes(filename);
-          byproducts.push_back(filename);
+          byproducts.push_back(cmSystemTools::CollapseFullPath(filename));
         } break;
         case doing_depends: {
           std::string dep = copy;
           cmSystemTools::ConvertToUnixSlashes(dep);
-          depends.push_back(dep);
+          depends.push_back(std::move(dep));
         } break;
         case doing_comment:
           comment_buffer = copy;
@@ -136,8 +140,11 @@ bool cmAddCustomTargetCommand::InitialPass(
         case doing_source:
           sources.push_back(copy);
           break;
+        case doing_job_pool:
+          job_pool = copy;
+          break;
         default:
-          this->SetError("Wrong syntax. Unknown type of argument.");
+          status.SetError("Wrong syntax. Unknown type of argument.");
           return false;
       }
     }
@@ -145,10 +152,9 @@ bool cmAddCustomTargetCommand::InitialPass(
 
   std::string::size_type pos = targetName.find_first_of("#<>");
   if (pos != std::string::npos) {
-    std::ostringstream msg;
-    msg << "called with target name containing a \"" << targetName[pos]
-        << "\".  This character is not allowed.";
-    this->SetError(msg.str());
+    status.SetError(cmStrCat("called with target name containing a \"",
+                             targetName[pos],
+                             "\".  This character is not allowed."));
     return false;
   }
 
@@ -160,35 +166,8 @@ bool cmAddCustomTargetCommand::InitialPass(
   if (nameOk) {
     nameOk = targetName.find(':') == std::string::npos;
   }
-  if (!nameOk) {
-    cmake::MessageType messageType = cmake::AUTHOR_WARNING;
-    std::ostringstream e;
-    bool issueMessage = false;
-    switch (this->Makefile->GetPolicyStatus(cmPolicies::CMP0037)) {
-      case cmPolicies::WARN:
-        e << cmPolicies::GetPolicyWarning(cmPolicies::CMP0037) << "\n";
-        issueMessage = true;
-      case cmPolicies::OLD:
-        break;
-      case cmPolicies::NEW:
-      case cmPolicies::REQUIRED_IF_USED:
-      case cmPolicies::REQUIRED_ALWAYS:
-        issueMessage = true;
-        messageType = cmake::FATAL_ERROR;
-    }
-    if (issueMessage) {
-      /* clang-format off */
-      e << "The target name \"" << targetName <<
-          "\" is reserved or not valid for certain "
-          "CMake features, such as generator expressions, and may result "
-          "in undefined behavior.";
-      /* clang-format on */
-      this->Makefile->IssueMessage(messageType, e.str());
-
-      if (messageType == cmake::FATAL_ERROR) {
-        return false;
-      }
-    }
+  if (!nameOk && !mf.CheckCMP0037(targetName, cmStateEnums::UTILITY)) {
+    return false;
   }
 
   // Store the last command line finished.
@@ -200,44 +179,45 @@ bool cmAddCustomTargetCommand::InitialPass(
   // Enforce name uniqueness.
   {
     std::string msg;
-    if (!this->Makefile->EnforceUniqueName(targetName, msg, true)) {
-      this->SetError(msg);
+    if (!mf.EnforceUniqueName(targetName, msg, true)) {
+      status.SetError(msg);
       return false;
     }
   }
 
-  // Convert working directory to a full path.
-  if (!working_directory.empty()) {
-    const char* build_dir = this->Makefile->GetCurrentBinaryDirectory();
-    working_directory =
-      cmSystemTools::CollapseFullPath(working_directory, build_dir);
-  }
-
   if (commandLines.empty() && !byproducts.empty()) {
-    this->Makefile->IssueMessage(
-      cmake::FATAL_ERROR,
-      "BYPRODUCTS may not be specified without any COMMAND");
+    mf.IssueMessage(MessageType::FATAL_ERROR,
+                    "BYPRODUCTS may not be specified without any COMMAND");
     return true;
   }
   if (commandLines.empty() && uses_terminal) {
-    this->Makefile->IssueMessage(
-      cmake::FATAL_ERROR,
-      "USES_TERMINAL may not be specified without any COMMAND");
+    mf.IssueMessage(MessageType::FATAL_ERROR,
+                    "USES_TERMINAL may not be specified without any COMMAND");
     return true;
   }
   if (commandLines.empty() && command_expand_lists) {
-    this->Makefile->IssueMessage(
-      cmake::FATAL_ERROR,
+    mf.IssueMessage(
+      MessageType::FATAL_ERROR,
       "COMMAND_EXPAND_LISTS may not be specified without any COMMAND");
     return true;
   }
 
+  if (uses_terminal && !job_pool.empty()) {
+    status.SetError("JOB_POOL is shadowed by USES_TERMINAL.");
+    return false;
+  }
+
+  // Make sure the byproduct names and locations are safe.
+  if (!cmCheckCustomOutputs(byproducts, "BYPRODUCTS", status)) {
+    return false;
+  }
+
   // Add the utility target to the makefile.
   bool escapeOldStyle = !verbatim;
-  cmTarget* target = this->Makefile->AddUtilityCommand(
-    targetName, excludeFromAll, working_directory.c_str(), byproducts, depends,
-    commandLines, escapeOldStyle, comment, uses_terminal,
-    command_expand_lists);
+  cmTarget* target = mf.AddUtilityCommand(
+    targetName, cmCommandOrigin::Project, excludeFromAll,
+    working_directory.c_str(), byproducts, depends, commandLines,
+    escapeOldStyle, comment, uses_terminal, command_expand_lists, job_pool);
 
   // Add additional user-specified source files to the target.
   target->AddSources(sources);

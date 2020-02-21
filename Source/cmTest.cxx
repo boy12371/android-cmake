@@ -5,18 +5,17 @@
 #include "cmMakefile.h"
 #include "cmProperty.h"
 #include "cmState.h"
-#include "cmSystemTools.h"
+#include "cmStringAlgorithms.h"
 
 cmTest::cmTest(cmMakefile* mf)
-  : Backtrace(mf->GetBacktrace())
+  : CommandExpandLists(false)
+  , Backtrace(mf->GetBacktrace())
 {
   this->Makefile = mf;
   this->OldStyle = true;
 }
 
-cmTest::~cmTest()
-{
-}
+cmTest::~cmTest() = default;
 
 cmListFileBacktrace const& cmTest::GetBacktrace() const
 {
@@ -48,7 +47,7 @@ const char* cmTest::GetProperty(const std::string& prop) const
 
 bool cmTest::GetPropertyAsBool(const std::string& prop) const
 {
-  return cmSystemTools::IsOn(this->GetProperty(prop));
+  return cmIsOn(this->GetProperty(prop));
 }
 
 void cmTest::SetProperty(const std::string& prop, const char* value)
@@ -60,4 +59,14 @@ void cmTest::AppendProperty(const std::string& prop, const char* value,
                             bool asString)
 {
   this->Properties.AppendProperty(prop, value, asString);
+}
+
+bool cmTest::GetCommandExpandLists() const
+{
+  return this->CommandExpandLists;
+}
+
+void cmTest::SetCommandExpandLists(bool b)
+{
+  this->CommandExpandLists = b;
 }

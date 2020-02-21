@@ -3,7 +3,13 @@
 #ifndef cmListFileLexer_h
 #define cmListFileLexer_h
 
-typedef enum cmListFileLexer_Type_e {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* NOLINTNEXTLINE(modernize-use-using) */
+typedef enum cmListFileLexer_Type_e
+{
   cmListFileLexer_Token_None,
   cmListFileLexer_Token_Space,
   cmListFileLexer_Token_Newline,
@@ -19,6 +25,7 @@ typedef enum cmListFileLexer_Type_e {
   cmListFileLexer_Token_BadString
 } cmListFileLexer_Type;
 
+/* NOLINTNEXTLINE(modernize-use-using) */
 typedef struct cmListFileLexer_Token_s cmListFileLexer_Token;
 struct cmListFileLexer_Token_s
 {
@@ -39,13 +46,12 @@ enum cmListFileLexer_BOM_e
   cmListFileLexer_BOM_UTF32BE,
   cmListFileLexer_BOM_UTF32LE
 };
+
+/* NOLINTNEXTLINE(modernize-use-using) */
 typedef enum cmListFileLexer_BOM_e cmListFileLexer_BOM;
 
+/* NOLINTNEXTLINE(modernize-use-using) */
 typedef struct cmListFileLexer_s cmListFileLexer;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 cmListFileLexer* cmListFileLexer_New(void);
 int cmListFileLexer_SetFileName(cmListFileLexer*, const char*,

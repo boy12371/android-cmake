@@ -5,7 +5,7 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include <stddef.h>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -46,8 +46,8 @@ public:
   }
 
 private:
-  bool SawBeginExpression;
-  bool SawGeneratorExpression;
+  bool SawBeginExpression = false;
+  bool SawGeneratorExpression = false;
 };
 
 #endif

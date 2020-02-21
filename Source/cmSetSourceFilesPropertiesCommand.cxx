@@ -2,18 +2,23 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmSetSourceFilesPropertiesCommand.h"
 
+#include "cmExecutionStatus.h"
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
-#include "cmSystemTools.h"
+#include "cmStringAlgorithms.h"
 
-class cmExecutionStatus;
+static bool RunCommand(cmMakefile* mf,
+                       std::vector<std::string>::const_iterator filebeg,
+                       std::vector<std::string>::const_iterator fileend,
+                       std::vector<std::string>::const_iterator propbeg,
+                       std::vector<std::string>::const_iterator propend,
+                       std::string& errors);
 
-// cmSetSourceFilesPropertiesCommand
-bool cmSetSourceFilesPropertiesCommand::InitialPass(
-  std::vector<std::string> const& args, cmExecutionStatus&)
+bool cmSetSourceFilesPropertiesCommand(std::vector<std::string> const& args,
+                                       cmExecutionStatus& status)
 {
   if (args.size() < 2) {
-    this->SetError("called with incorrect number of arguments");
+    status.SetError("called with incorrect number of arguments");
     return false;
   }
 
@@ -29,22 +34,24 @@ bool cmSetSourceFilesPropertiesCommand::InitialPass(
     ++j;
   }
 
+  cmMakefile& mf = status.GetMakefile();
+
   // now call the worker function
   std::string errors;
-  bool ret = cmSetSourceFilesPropertiesCommand::RunCommand(
-    this->Makefile, args.begin(), args.begin() + numFiles,
-    args.begin() + numFiles, args.end(), errors);
+  bool ret = RunCommand(&mf, args.begin(), args.begin() + numFiles,
+                        args.begin() + numFiles, args.end(), errors);
   if (!ret) {
-    this->SetError(errors);
+    status.SetError(errors);
   }
   return ret;
 }
 
-bool cmSetSourceFilesPropertiesCommand::RunCommand(
-  cmMakefile* mf, std::vector<std::string>::const_iterator filebeg,
-  std::vector<std::string>::const_iterator fileend,
-  std::vector<std::string>::const_iterator propbeg,
-  std::vector<std::string>::const_iterator propend, std::string& errors)
+static bool RunCommand(cmMakefile* mf,
+                       std::vector<std::string>::const_iterator filebeg,
+                       std::vector<std::string>::const_iterator fileend,
+                       std::vector<std::string>::const_iterator propbeg,
+                       std::vector<std::string>::const_iterator propend,
+                       std::string& errors)
 {
   std::vector<std::string> propertyPairs;
   bool generated = false;
@@ -53,17 +60,17 @@ bool cmSetSourceFilesPropertiesCommand::RunCommand(
   for (j = propbeg; j != propend; ++j) {
     // old style allows for specifier before PROPERTIES keyword
     if (*j == "ABSTRACT") {
-      propertyPairs.push_back("ABSTRACT");
-      propertyPairs.push_back("1");
+      propertyPairs.emplace_back("ABSTRACT");
+      propertyPairs.emplace_back("1");
     } else if (*j == "WRAP_EXCLUDE") {
-      propertyPairs.push_back("WRAP_EXCLUDE");
-      propertyPairs.push_back("1");
+      propertyPairs.emplace_back("WRAP_EXCLUDE");
+      propertyPairs.emplace_back("1");
     } else if (*j == "GENERATED") {
       generated = true;
-      propertyPairs.push_back("GENERATED");
-      propertyPairs.push_back("1");
+      propertyPairs.emplace_back("GENERATED");
+      propertyPairs.emplace_back("1");
     } else if (*j == "COMPILE_FLAGS") {
-      propertyPairs.push_back("COMPILE_FLAGS");
+      propertyPairs.emplace_back("COMPILE_FLAGS");
       ++j;
       if (j == propend) {
         errors = "called with incorrect number of arguments "
@@ -72,7 +79,7 @@ bool cmSetSourceFilesPropertiesCommand::RunCommand(
       }
       propertyPairs.push_back(*j);
     } else if (*j == "OBJECT_DEPENDS") {
-      propertyPairs.push_back("OBJECT_DEPENDS");
+      propertyPairs.emplace_back("OBJECT_DEPENDS");
       ++j;
       if (j == propend) {
         errors = "called with incorrect number of arguments "
@@ -87,7 +94,7 @@ bool cmSetSourceFilesPropertiesCommand::RunCommand(
         propertyPairs.push_back(*j);
         if (*j == "GENERATED") {
           ++j;
-          if (j != propend && cmSystemTools::IsOn(j->c_str())) {
+          if (j != propend && cmIsOn(*j)) {
             generated = true;
           }
         } else {

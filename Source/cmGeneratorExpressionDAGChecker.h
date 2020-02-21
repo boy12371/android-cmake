@@ -5,14 +5,15 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmListFileCache.h"
-
 #include <map>
 #include <set>
 #include <string>
 
+#include "cmListFileCache.h"
+
 struct GeneratorExpressionContent;
 struct cmGeneratorExpressionContext;
+class cmGeneratorTarget;
 
 #define CM_SELECT_BOTH(F, A1, A2) F(A1, A2)
 #define CM_SELECT_FIRST(F, A1, A2) F(A1)
@@ -25,7 +26,11 @@ struct cmGeneratorExpressionContext;
   SELECT(F, EvaluatingCompileOptions, COMPILE_OPTIONS)                        \
   SELECT(F, EvaluatingAutoUicOptions, AUTOUIC_OPTIONS)                        \
   SELECT(F, EvaluatingSources, SOURCES)                                       \
-  SELECT(F, EvaluatingCompileFeatures, COMPILE_FEATURES)
+  SELECT(F, EvaluatingCompileFeatures, COMPILE_FEATURES)                      \
+  SELECT(F, EvaluatingLinkOptions, LINK_OPTIONS)                              \
+  SELECT(F, EvaluatingLinkDirectories, LINK_DIRECTORIES)                      \
+  SELECT(F, EvaluatingLinkDepends, LINK_DEPENDS)                              \
+  SELECT(F, EvaluatingPrecompileHeaders, PRECOMPILE_HEADERS)
 
 #define CM_FOR_EACH_TRANSITIVE_PROPERTY(F)                                    \
   CM_FOR_EACH_TRANSITIVE_PROPERTY_IMPL(F, CM_SELECT_BOTH)
@@ -38,13 +43,13 @@ struct cmGeneratorExpressionContext;
 
 struct cmGeneratorExpressionDAGChecker
 {
-  cmGeneratorExpressionDAGChecker(const cmListFileBacktrace& backtrace,
-                                  const std::string& target,
-                                  const std::string& property,
+  cmGeneratorExpressionDAGChecker(cmListFileBacktrace backtrace,
+                                  cmGeneratorTarget const* target,
+                                  std::string property,
                                   const GeneratorExpressionContent* content,
                                   cmGeneratorExpressionDAGChecker* parent);
-  cmGeneratorExpressionDAGChecker(const std::string& target,
-                                  const std::string& property,
+  cmGeneratorExpressionDAGChecker(cmGeneratorTarget const* target,
+                                  std::string property,
                                   const GeneratorExpressionContent* content,
                                   cmGeneratorExpressionDAGChecker* parent);
 
@@ -61,7 +66,9 @@ struct cmGeneratorExpressionDAGChecker
   void ReportError(cmGeneratorExpressionContext* context,
                    const std::string& expr);
 
-  bool EvaluatingLinkLibraries(const char* tgt = nullptr);
+  bool EvaluatingGenexExpression();
+  bool EvaluatingPICExpression();
+  bool EvaluatingLinkLibraries(cmGeneratorTarget const* tgt = nullptr);
 
 #define DECLARE_TRANSITIVE_PROPERTY_METHOD(METHOD) bool METHOD() const;
 
@@ -72,7 +79,7 @@ struct cmGeneratorExpressionDAGChecker
   bool GetTransitivePropertiesOnly();
   void SetTransitivePropertiesOnly() { this->TransitivePropertiesOnly = true; }
 
-  std::string TopTarget() const;
+  cmGeneratorTarget const* TopTarget() const;
 
 private:
   Result CheckGraph() const;
@@ -80,9 +87,9 @@ private:
 
 private:
   const cmGeneratorExpressionDAGChecker* const Parent;
-  const std::string Target;
+  cmGeneratorTarget const* Target;
   const std::string Property;
-  std::map<std::string, std::set<std::string>> Seen;
+  mutable std::map<cmGeneratorTarget const*, std::set<std::string>> Seen;
   const GeneratorExpressionContent* const Content;
   const cmListFileBacktrace Backtrace;
   Result CheckResult;

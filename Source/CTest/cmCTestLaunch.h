@@ -5,12 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmsys/RegularExpression.hxx"
 #include <set>
 #include <string>
 #include <vector>
 
-class cmXMLWriter;
+#include "cmsys/RegularExpression.hxx"
+
+class cmXMLElement;
 
 /** \class cmCTestLaunch
  * \brief Launcher for make rules to report results for ctest
@@ -27,6 +28,9 @@ private:
   // Initialize the launcher from its command line.
   cmCTestLaunch(int argc, const char* const* argv);
   ~cmCTestLaunch();
+
+  cmCTestLaunch(const cmCTestLaunch&) = delete;
+  cmCTestLaunch& operator=(const cmCTestLaunch&) = delete;
 
   // Run the real command.
   int Run();
@@ -89,11 +93,11 @@ private:
 
   // Methods to generate the xml fragment.
   void WriteXML();
-  void WriteXMLAction(cmXMLWriter& xml);
-  void WriteXMLCommand(cmXMLWriter& xml);
-  void WriteXMLResult(cmXMLWriter& xml);
-  void WriteXMLLabels(cmXMLWriter& xml);
-  void DumpFileToXML(cmXMLWriter& xml, std::string const& fname);
+  void WriteXMLAction(cmXMLElement&);
+  void WriteXMLCommand(cmXMLElement&);
+  void WriteXMLResult(cmXMLElement&);
+  void WriteXMLLabels(cmXMLElement&);
+  void DumpFileToXML(cmXMLElement&, const char* tag, std::string const& fname);
 
   // Configuration
   void LoadConfig();

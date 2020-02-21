@@ -6,13 +6,14 @@
 #include "cmConfigure.h" // IWYU pragma: keep
 
 #include <map>
-#include <memory> // IWYU pragma: keep
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "cm_sys_stat.h"
+
 #include "cmGeneratorExpression.h"
 #include "cmPolicies.h"
-#include "cm_sys_stat.h"
 
 class cmLocalGenerator;
 
@@ -20,7 +21,7 @@ class cmGeneratorExpressionEvaluationFile
 {
 public:
   cmGeneratorExpressionEvaluationFile(
-    const std::string& input,
+    std::string input,
     std::unique_ptr<cmCompiledGeneratorExpression> outputFileExpr,
     std::unique_ptr<cmCompiledGeneratorExpression> condition,
     bool inputIsContent, cmPolicies::PolicyStatus policyStatusCMP0070);

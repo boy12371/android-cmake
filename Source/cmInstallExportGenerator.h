@@ -5,13 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmInstallGenerator.h"
-#include "cmScriptGenerator.h"
-
+#include <cstddef>
 #include <iosfwd>
-#include <stddef.h>
 #include <string>
 #include <vector>
+
+#include "cmInstallGenerator.h"
+#include "cmScriptGenerator.h"
 
 class cmExportInstallFileGenerator;
 class cmExportSet;
@@ -34,13 +34,14 @@ public:
 
   cmExportSet* GetExportSet() { return this->ExportSet; }
 
-  void Compute(cmLocalGenerator* lg) override;
+  bool Compute(cmLocalGenerator* lg) override;
 
   cmLocalGenerator* GetLocalGenerator() const { return this->LocalGenerator; }
 
   const std::string& GetNamespace() const { return this->Namespace; }
 
   std::string const& GetDestination() const { return this->Destination; }
+  std::string GetDestinationFile() const;
 
 protected:
   void GenerateScript(std::ostream& os) override;

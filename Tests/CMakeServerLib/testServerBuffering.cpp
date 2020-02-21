@@ -1,9 +1,10 @@
-#include "cmConnection.h"
-#include "cmServerConnection.h"
 #include <iostream>
-#include <stddef.h>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "cmConnection.h"
+#include "cmServerConnection.h"
 
 void print_error(const std::vector<std::string>& input,
                  const std::vector<std::string>& output)
@@ -51,8 +52,8 @@ int testServerBuffering(int, char** const)
     std::unique_ptr<cmConnectionBufferStrategy>(new cmServerBufferStrategy);
   std::vector<std::string> response;
   std::string rawBuffer;
-  for (size_t i = 0; i < fullMessage.size(); i++) {
-    rawBuffer += fullMessage[i];
+  for (auto& messageChar : fullMessage) {
+    rawBuffer += messageChar;
     std::string packet = bufferingStrategy->BufferMessage(rawBuffer);
     do {
       if (!packet.empty() && packet != "\r\n") {

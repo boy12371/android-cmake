@@ -5,13 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCTestVC.h"
-
 #include <iosfwd>
 #include <list>
 #include <map>
 #include <string>
 #include <vector>
+
+#include "cmCTestVC.h"
 
 class cmCTest;
 class cmXMLWriter;
@@ -31,6 +31,8 @@ public:
 protected:
   // Implement cmCTestVC internal API.
   bool WriteXMLUpdates(cmXMLWriter& xml) override;
+
+  void SetNewRevision(std::string const& revision) override;
 
   /** Represent a vcs-reported action for one path in a revision.  */
   struct Change

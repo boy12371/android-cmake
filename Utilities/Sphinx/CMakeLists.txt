@@ -3,11 +3,11 @@
 
 if(NOT CMake_SOURCE_DIR)
   set(CMakeHelp_STANDALONE 1)
-  cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+  cmake_minimum_required(VERSION 3.1...3.15 FATAL_ERROR)
   get_filename_component(tmp "${CMAKE_CURRENT_SOURCE_DIR}" PATH)
   get_filename_component(CMake_SOURCE_DIR "${tmp}" PATH)
   include(${CMake_SOURCE_DIR}/Modules/CTestUseLaunchers.cmake)
-  include(${CMake_SOURCE_DIR}/Source/CMakeVersionCompute.cmake)
+  include(${CMake_SOURCE_DIR}/Source/CMakeVersion.cmake)
   include(${CMake_SOURCE_DIR}/Source/CMakeInstallDestinations.cmake)
   unset(CMAKE_DATA_DIR)
   unset(CMAKE_DATA_DIR CACHE)
@@ -17,6 +17,7 @@ if(NOT CMake_SOURCE_DIR)
 endif()
 project(CMakeHelp NONE)
 
+option(SPHINX_INFO "Build Info manual with Sphinx" OFF)
 option(SPHINX_MAN "Build man pages with Sphinx" OFF)
 option(SPHINX_HTML "Build html help with Sphinx" OFF)
 option(SPHINX_SINGLEHTML "Build html single page help with Sphinx" OFF)
@@ -32,7 +33,7 @@ separate_arguments(sphinx_flags UNIX_COMMAND "${SPHINX_FLAGS}")
 mark_as_advanced(SPHINX_TEXT)
 mark_as_advanced(SPHINX_FLAGS)
 
-if(NOT SPHINX_MAN AND NOT SPHINX_HTML AND NOT SPHINX_SINGLEHTML AND NOT SPHINX_QTHELP AND NOT SPHINX_TEXT)
+if(NOT SPHINX_INFO AND NOT SPHINX_MAN AND NOT SPHINX_HTML AND NOT SPHINX_SINGLEHTML AND NOT SPHINX_QTHELP AND NOT SPHINX_TEXT)
   return()
 elseif(NOT SPHINX_EXECUTABLE)
   message(FATAL_ERROR "SPHINX_EXECUTABLE (sphinx-build) is not found!")
@@ -66,6 +67,24 @@ endif()
 if(SPHINX_TEXT)
   list(APPEND doc_formats text)
 endif()
+if(SPHINX_INFO)
+  find_program(MAKEINFO_EXECUTABLE
+    NAMES makeinfo
+    DOC "makeinfo tool"
+    )
+  if (NOT MAKEINFO_EXECUTABLE)
+    message(FATAL_ERROR "MAKEINFO_EXECUTABLE (makeinfo) not found!")
+  endif()
+  list(APPEND doc_formats texinfo)
+
+  # Sphinx texinfo builder supports .info, .txt, .html and .pdf output.
+  # SPHINX_INFO controls the .info output.
+  set(texinfo_extra_commands
+    COMMAND ${MAKEINFO_EXECUTABLE} --no-split -o
+      ${CMAKE_CURRENT_BINARY_DIR}/texinfo/cmake.info
+      ${CMAKE_CURRENT_BINARY_DIR}/texinfo/cmake.texi
+  )
+endif()
 if(SPHINX_QTHELP)
   find_package(PythonInterp REQUIRED)
 
@@ -86,7 +105,6 @@ if(SPHINX_QTHELP)
     # Workaround sphinx configurability:
     # https://bitbucket.org/birkenfeld/sphinx/issue/1448/make-qthelp-more-configurable
     COMMAND ${CMAKE_COMMAND} "-DQTHELP_DIR=${CMAKE_CURRENT_BINARY_DIR}/qthelp/"
-      "-DCMake_VERSION=${CMake_VERSION_MAJOR}${CMake_VERSION_MINOR}${CMake_VERSION_PATCH}"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/fixup_qthelp_names.cmake"
 
     # Create proper identifiers. Workaround for
@@ -143,6 +161,14 @@ if(CMake_SPHINX_DEPEND_ON_EXECUTABLES)
   endforeach()
 endif()
 
+if(SPHINX_INFO)
+  CMake_OPTIONAL_COMPONENT(sphinx-info)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/texinfo/cmake.info
+          DESTINATION ${CMAKE_INFO_DIR}
+          ${COMPONENT}
+          )
+endif()
+
 if(SPHINX_MAN)
   file(GLOB man_rst RELATIVE ${CMake_SOURCE_DIR}/Help/manual
     ${CMake_SOURCE_DIR}/Help/manual/*.[1-9].rst)
@@ -189,7 +215,7 @@ endif()
 
 if(SPHINX_QTHELP)
   CMake_OPTIONAL_COMPONENT(sphinx-qthelp)
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qthelp/CMake-${CMake_VERSION_MAJOR}${CMake_VERSION_MINOR}${CMake_VERSION_PATCH}.qch
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qthelp/CMake.qch
           DESTINATION ${CMAKE_DOC_DIR} ${COMPONENT}
           )
 endif()

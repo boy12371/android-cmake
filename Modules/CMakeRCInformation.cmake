@@ -17,25 +17,20 @@ set(CMAKE_SYSTEM_AND_RC_COMPILER_INFO_FILE
   ${CMAKE_ROOT}/Modules/Platform/${CMAKE_SYSTEM_NAME}-${CMAKE_BASE_NAME}.cmake)
 include(Platform/${CMAKE_SYSTEM_NAME}-${CMAKE_BASE_NAME} OPTIONAL)
 
+# This should be included before the _INIT variables are
+# used to initialize the cache.  Since the rule variables
+# have if blocks on them, users can still define them here.
+# But, it should still be after the platform file so changes can
+# be made to those values.
+if(CMAKE_USER_MAKE_RULES_OVERRIDE)
+  # Save the full path of the file so try_compile can use it.
+  include(${CMAKE_USER_MAKE_RULES_OVERRIDE} RESULT_VARIABLE _override)
+  set(CMAKE_USER_MAKE_RULES_OVERRIDE "${_override}")
+endif()
+
 set(CMAKE_RC_FLAGS_INIT "$ENV{RCFLAGS} ${CMAKE_RC_FLAGS_INIT}")
 
-foreach(c "" _DEBUG _RELEASE _MINSIZEREL _RELWITHDEBINFO)
-  string(STRIP "${CMAKE_RC_FLAGS${c}_INIT}" CMAKE_RC_FLAGS${c}_INIT)
-endforeach()
-
-set (CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS_INIT}" CACHE STRING
-     "Flags for Windows Resource Compiler.")
-
-if(NOT CMAKE_NOT_USING_CONFIG_FLAGS)
-  set (CMAKE_RC_FLAGS_DEBUG "${CMAKE_RC_FLAGS_DEBUG_INIT}" CACHE STRING
-    "Flags for Windows Resource Compiler during debug builds.")
-  set (CMAKE_RC_FLAGS_MINSIZEREL "${CMAKE_RC_FLAGS_MINSIZEREL_INIT}" CACHE STRING
-    "Flags for Windows Resource Compiler during release builds for minimum size.")
-  set (CMAKE_RC_FLAGS_RELEASE "${CMAKE_RC_FLAGS_RELEASE_INIT}" CACHE STRING
-    "Flags for Windows Resource Compiler during release builds.")
-  set (CMAKE_RC_FLAGS_RELWITHDEBINFO "${CMAKE_RC_FLAGS_RELWITHDEBINFO_INIT}" CACHE STRING
-    "Flags for Windows Resource Compiler during release builds with debug info.")
-endif()
+cmake_initialize_per_config_variable(CMAKE_RC_FLAGS "Flags for Windows Resource Compiler")
 
 # These are the only types of flags that should be passed to the rc
 # command, if COMPILE_FLAGS is used on a target this will be used
@@ -48,15 +43,8 @@ set(CMAKE_INCLUDE_FLAG_RC "-I")
 # compile a Resource file into an object file
 if(NOT CMAKE_RC_COMPILE_OBJECT)
   set(CMAKE_RC_COMPILE_OBJECT
-    "<CMAKE_RC_COMPILER> <DEFINES> <INCLUDES> <FLAGS> /fo<OBJECT> <SOURCE>")
+    "<CMAKE_RC_COMPILER> <DEFINES> <INCLUDES> <FLAGS> /fo <OBJECT> <SOURCE>")
 endif()
 
-mark_as_advanced(
-CMAKE_RC_FLAGS
-CMAKE_RC_FLAGS_DEBUG
-CMAKE_RC_FLAGS_MINSIZEREL
-CMAKE_RC_FLAGS_RELEASE
-CMAKE_RC_FLAGS_RELWITHDEBINFO
-)
 # set this variable so we can avoid loading this more than once.
 set(CMAKE_RC_INFORMATION_LOADED 1)

@@ -5,20 +5,21 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCursesStandardIncludes.h"
-#include "cmCursesWidget.h"
-
 #include <string>
 #include <vector>
+
+#include "cmCursesStandardIncludes.h"
+#include "cmCursesWidget.h"
 
 class cmCursesMainForm;
 
 class cmCursesOptionsWidget : public cmCursesWidget
 {
-  CM_DISABLE_COPY(cmCursesOptionsWidget)
-
 public:
   cmCursesOptionsWidget(int width, int height, int left, int top);
+
+  cmCursesOptionsWidget(cmCursesOptionsWidget const&) = delete;
+  cmCursesOptionsWidget& operator=(cmCursesOptionsWidget const&) = delete;
 
   // Description:
   // Handle user input. Called by the container of this widget

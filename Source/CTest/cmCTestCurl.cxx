@@ -2,11 +2,14 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCTestCurl.h"
 
-#include "cmCTest.h"
-#include "cmSystemTools.h"
-
+#include <cstdio>
 #include <ostream>
-#include <stdio.h>
+
+#include "cmAlgorithms.h"
+#include "cmCTest.h"
+#include "cmCurl.h"
+#include "cmStringAlgorithms.h"
+#include "cmSystemTools.h"
 
 cmCTestCurl::cmCTestCurl(cmCTest* ctest)
 {
@@ -42,19 +45,15 @@ size_t curlWriteMemoryCallback(void* ptr, size_t size, size_t nmemb,
                                void* data)
 {
   int realsize = static_cast<int>(size * nmemb);
-
-  std::vector<char>* vec = static_cast<std::vector<char>*>(data);
   const char* chPtr = static_cast<char*>(ptr);
-  vec->insert(vec->end(), chPtr, chPtr + realsize);
+  cmAppend(*static_cast<std::vector<char>*>(data), chPtr, chPtr + realsize);
   return realsize;
 }
 
 size_t curlDebugCallback(CURL* /*unused*/, curl_infotype /*unused*/,
                          char* chPtr, size_t size, void* data)
 {
-  std::vector<char>* vec = static_cast<std::vector<char>*>(data);
-  vec->insert(vec->end(), chPtr, chPtr + size);
-
+  cmAppend(*static_cast<std::vector<char>*>(data), chPtr, chPtr + size);
   return size;
 }
 }
@@ -76,6 +75,7 @@ bool cmCTestCurl::InitCurl()
   if (!this->Curl) {
     return false;
   }
+  cmCurlSetCAInfo(this->Curl);
   if (this->VerifyPeerOff) {
     curl_easy_setopt(this->Curl, CURLOPT_SSL_VERIFYPEER, 0);
   }
@@ -128,9 +128,7 @@ bool cmCTestCurl::UploadFile(std::string const& local_file,
     return false;
   }
   // set the url
-  std::string upload_url = url;
-  upload_url += "?";
-  upload_url += fields;
+  std::string upload_url = cmStrCat(url, '?', fields);
   ::curl_easy_setopt(this->Curl, CURLOPT_URL, upload_url.c_str());
   // now specify which file to upload
   ::curl_easy_setopt(this->Curl, CURLOPT_INFILE, ftpfile);
@@ -146,7 +144,7 @@ bool cmCTestCurl::UploadFile(std::string const& local_file,
     ::curl_slist_append(nullptr, "Content-Type: text/xml");
   // Add any additional headers that the user specified.
   for (std::string const& h : this->HttpHeaders) {
-    cmCTestOptionalLog(this->CTest, HANDLER_OUTPUT,
+    cmCTestOptionalLog(this->CTest, DEBUG,
                        "   Add HTTP Header: \"" << h << "\"" << std::endl,
                        this->Quiet);
     headers = ::curl_slist_append(headers, h.c_str());
@@ -175,7 +173,8 @@ bool cmCTestCurl::UploadFile(std::string const& local_file,
                        "Curl debug: [" << curlDebug << "]\n", this->Quiet);
   }
   if (response.empty()) {
-    cmCTestLog(this->CTest, ERROR_MESSAGE, "No response from server.\n"
+    cmCTestLog(this->CTest, ERROR_MESSAGE,
+               "No response from server.\n"
                  << curlDebug);
     return false;
   }
@@ -186,7 +185,8 @@ bool cmCTestCurl::HttpRequest(std::string const& url,
                               std::string const& fields, std::string& response)
 {
   response.clear();
-  cmCTestOptionalLog(this->CTest, DEBUG, "HttpRequest\n"
+  cmCTestOptionalLog(this->CTest, DEBUG,
+                     "HttpRequest\n"
                        << "url: " << url << "\n"
                        << "fields " << fields << "\n",
                      this->Quiet);
@@ -212,7 +212,7 @@ bool cmCTestCurl::HttpRequest(std::string const& url,
   struct curl_slist* headers = nullptr;
   if (!this->HttpHeaders.empty()) {
     for (std::string const& h : this->HttpHeaders) {
-      cmCTestOptionalLog(this->CTest, HANDLER_OUTPUT,
+      cmCTestOptionalLog(this->CTest, DEBUG,
                          "   Add HTTP Header: \"" << h << "\"" << std::endl,
                          this->Quiet);
       headers = ::curl_slist_append(headers, h.c_str());

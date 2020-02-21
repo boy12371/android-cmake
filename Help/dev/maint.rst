@@ -51,15 +51,18 @@ using a local branch named ``release-$ver``, where ``$ver`` is the version
 number of the current release in the form ``$major.$minor``.  It is always
 merged into ``master`` before publishing.
 
-To merge some ``$topic`` branch into ``release``, first create the local
-branch:
+Before merging a ``$topic`` branch into ``release``, verify that the
+``$topic`` branch has already been merged to ``master`` via the usual
+``Do: merge`` process.  Then, to merge the ``$topic`` branch into
+``release``, start by creating the local branch:
 
 .. code-block:: shell
 
   git fetch origin
   git checkout -b release-$ver origin/release
 
-Merge the ``$topic`` branch into the local ``release-$ver`` branch:
+Merge the ``$topic`` branch into the local ``release-$ver`` branch, making
+sure to include a ``Merge-request: !xxxx`` footer in the commit message:
 
 .. code-block:: shell
 
@@ -73,6 +76,13 @@ Merge the ``release-$ver`` branch to ``master``:
   git pull
   git merge --no-ff release-$ver
 
+Review new ancestry to ensure nothing unexpected was merged to either branch:
+
+.. code-block:: shell
+
+  git log --graph --boundary origin/master..master
+  git log --graph --boundary origin/release..release-$ver
+
 Publish both ``master`` and ``release`` simultaneously:
 
 .. code-block:: shell
@@ -81,6 +91,45 @@ Publish both ``master`` and ``release`` simultaneously:
 
 .. _`CMake Review Process`: review.rst
 .. _`CMake CDash Page`: https://open.cdash.org/index.php?project=CMake
+
+Create Release Version
+======================
+
+When the ``release`` branch is ready to create a new release, follow the
+steps in the above `Maintain Current Release`_ section to checkout a local
+``release-$ver`` branch, where ``$ver`` is the version number of the
+current release in the form ``$major.$minor``.
+
+Edit ``Source/CMakeVersion.cmake`` to set the full version:
+
+.. code-block:: cmake
+
+  # CMake version number components.
+  set(CMake_VERSION_MAJOR $major)
+  set(CMake_VERSION_MINOR $minor)
+  set(CMake_VERSION_PATCH $patch)
+  #set(CMake_VERSION_RC $rc) # uncomment for release candidates
+
+In the following we use the placeholder ``$fullver`` for the full version
+number of the new release with the form ``$major.$minor.$patch[-rc$rc]``.
+If the version is not a release candidate, comment out the RC version
+component above and leave off the ``-rc$rc`` suffix from ``$fullver``.
+
+Commit the release version with the **exact** message ``CMake $fullver``:
+
+.. code-block:: shell
+
+  git commit -m "CMake $fullver"
+
+Tag the release using an annotated tag with the same message as the
+commit and named with the **exact** form ``v$fullver``:
+
+.. code-block:: shell
+
+  git tag -s -m "CMake $fullver" "v$fullver"
+
+Follow the steps in the above `Maintain Current Release`_ section to
+merge the ``release-$ver`` branch into ``master`` and publish both.
 
 Branch a New Release
 ====================
@@ -168,7 +217,7 @@ Commit with a message such as::
   the CMake Release Notes index page.
 
 Update ``Source/CMakeVersion.cmake`` to set the version to
-``$major.$minor.0-rc1``:
+``$major.$minor.0-rc0``:
 
 .. code-block:: cmake
 
@@ -176,13 +225,7 @@ Update ``Source/CMakeVersion.cmake`` to set the version to
   set(CMake_VERSION_MAJOR $major)
   set(CMake_VERSION_MINOR $minor)
   set(CMake_VERSION_PATCH 0)
-  set(CMake_VERSION_RC 1)
-
-Update ``Utilities/Release/upload_release.cmake``:
-
-.. code-block:: cmake
-
-  set(VERSION $ver)
+  set(CMake_VERSION_RC 0)
 
 Update uses of ``DEVEL_CMAKE_VERSION`` in the source tree to mention the
 actual version number:
@@ -193,7 +236,7 @@ actual version number:
 
 Commit with a message such as::
 
-  CMake $major.$minor.0-rc1 version update
+  Begin $ver release versioning
 
 Merge the ``release-$ver`` branch to ``master``:
 
@@ -221,7 +264,7 @@ Update ``Source/CMakeVersion.cmake`` to set the version to
   set(CMake_VERSION_MAJOR $major)
   set(CMake_VERSION_MINOR $minor)
   set(CMake_VERSION_PATCH $date)
-  #set(CMake_VERSION_RC 1)
+  #set(CMake_VERSION_RC 0)
 
 Commit with a message such as::
 
@@ -236,10 +279,11 @@ Push the update to the ``master`` and ``release`` branches:
 Announce 'release' Branch
 -------------------------
 
-Send email to the ``cmake-developers@cmake.org`` mailing list (perhaps
-in reply to a release preparation thread) announcing that post-release
-development is open::
+Post a topic to the `CMake Discourse Forum Development Category`_
+announcing that post-release development is open::
 
-  I've branched 'release' for $ver.  The repository is now open for
-  post-$ver development.  Please rebase open merge requests on 'master'
+  I've branched `release` for $ver.  The repository is now open for
+  post-$ver development.  Please rebase open merge requests on `master`
   before staging or merging.
+
+.. _`CMake Discourse Forum Development Category`: https://discourse.cmake.org/c/development

@@ -42,7 +42,7 @@ list(APPEND _cmake_options "-DTEST_LINK_DEPENDS=${TEST_LINK_DEPENDS}")
 
 list(APPEND _cmake_options "-DCMAKE_FORCE_DEPFILES=1")
 
-if(NOT CMAKE_GENERATOR MATCHES "Visual Studio ([^89]|[89][0-9])")
+if(NOT CMAKE_GENERATOR MATCHES "Visual Studio ([^9]|9[0-9])")
   set(TEST_MULTI3 1)
   list(APPEND _cmake_options "-DTEST_MULTI3=1")
 endif()
@@ -62,6 +62,12 @@ file(WRITE ${BuildDepends_BINARY_DIR}/Project/zot_macro_dir.hxx
   "static const char* zot_macro_dir = \"zot_macro_dir\";\n")
 file(WRITE ${BuildDepends_BINARY_DIR}/Project/zot_macro_tgt.hxx
   "static const char* zot_macro_tgt = \"zot_macro_tgt\";\n")
+file(WRITE ${BuildDepends_BINARY_DIR}/Project/zot_pch.hxx
+  "#ifndef ZOT_PCH_HXX\n"
+  "#define ZOT_PCH_HXX\n"
+  "static const char* zot_pch = \"zot_pch\";\n"
+  "#endif\n"
+  )
 
 file(WRITE ${BuildDepends_BINARY_DIR}/Project/link_depends_no_shared_lib.h
   "#define link_depends_no_shared_lib_value 1\n")
@@ -155,7 +161,7 @@ execute_process(COMMAND ${zot} OUTPUT_VARIABLE out RESULT_VARIABLE runResult)
 string(REGEX REPLACE "[\r\n]" " " out "${out}")
 message("Run result: ${runResult} Output: \"${out}\"")
 
-set(VALUE_UNCHANGED "[zot] [zot_custom] [zot_macro_dir] [zot_macro_tgt] ")
+set(VALUE_UNCHANGED "[zot] [zot_custom] [zot_macro_dir] [zot_macro_tgt] [zot_pch] ")
 if("${out}" STREQUAL "${VALUE_UNCHANGED}")
   message("Worked!")
 else()
@@ -245,6 +251,12 @@ file(WRITE ${BuildDepends_BINARY_DIR}/Project/zot_macro_dir.hxx
   "static const char* zot_macro_dir = \"zot_macro_dir changed\";\n")
 file(WRITE ${BuildDepends_BINARY_DIR}/Project/zot_macro_tgt.hxx
   "static const char* zot_macro_tgt = \"zot_macro_tgt changed\";\n")
+file(WRITE ${BuildDepends_BINARY_DIR}/Project/zot_pch.hxx
+  "#ifndef ZOT_PCH_HXX\n"
+  "#define ZOT_PCH_HXX\n"
+  "static const char* zot_pch = \"zot_pch changed\";\n"
+  "#endif\n"
+  )
 
 file(WRITE ${BuildDepends_BINARY_DIR}/Project/link_depends_no_shared_lib.h
   "#define link_depends_no_shared_lib_value 0\n")
@@ -326,7 +338,7 @@ string(REGEX REPLACE "[\r\n]" " " out "${out}")
 message("Run result: ${runResult} Output: \"${out}\"")
 
 set(VALUE_CHANGED
-  "[zot changed] [zot_custom changed] [zot_macro_dir changed] [zot_macro_tgt changed] "
+  "[zot changed] [zot_custom changed] [zot_macro_dir changed] [zot_macro_tgt changed] [zot_pch changed] "
   )
 if("${out}" STREQUAL "${VALUE_CHANGED}")
   message("Worked!")
@@ -341,6 +353,17 @@ if(TEST_LINK_DEPENDS)
   else()
     message(SEND_ERROR "LINK_DEPENDS failed.  Executable
   ${linkdep}
+is not newer than dependency
+  ${TEST_LINK_DEPENDS}
+")
+  endif()
+
+  set(linkdep2 ${BuildDepends_BINARY_DIR}/Project/linkdep2${CMAKE_EXECUTABLE_SUFFIX})
+  if(${linkdep2} IS_NEWER_THAN ${TEST_LINK_DEPENDS})
+    message("INTERFACE_LINK_DEPENDS worked")
+  else()
+    message(SEND_ERROR "INTERFACE_LINK_DEPENDS failed.  Executable
+  ${linkdep2}
 is not newer than dependency
   ${TEST_LINK_DEPENDS}
 ")

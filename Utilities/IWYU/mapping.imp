@@ -23,8 +23,12 @@
   # HACK: check whether this can be removed with next iwyu release.
   { include: [ "<bits/shared_ptr.h>", private, "<memory>", public ] },
   { include: [ "<bits/std_function.h>", private, "<functional>", public ] },
+  { include: [ "<bits/refwrap.h>", private, "<functional>", public ] },
+  { include: [ "<bits/stdint-intn.h>", private, "<stdint.h>", public ] },
+  { include: [ "<bits/stdint-uintn.h>", private, "<stdint.h>", public ] },
   { include: [ "<bits/time.h>", private, "<time.h>", public ] },
   { include: [ "<bits/types/clock_t.h>", private, "<time.h>", public ] },
+  { include: [ "<bits/types/mbstate_t.h>", private, "<wchar.h>", public ] },
   { include: [ "<bits/types/struct_timespec.h>", private, "<time.h>", public ] },
   { include: [ "<bits/types/struct_timeval.h>", private, "<time.h>", public ] },
   { include: [ "<bits/types/struct_tm.h>", private, "<time.h>", public ] },
@@ -39,35 +43,58 @@
   { symbol: [ "std::istringstream", private, "<sstream>", public ] },
   { symbol: [ "std::ostringstream", private, "<sstream>", public ] },
 
-  # HACK: iwyu suggests those two files each time vector[] is used.
+  # HACK: iwyu suggests <ext/alloc_traits.h> and <memory> each time vector[] is used.
   # https://github.com/include-what-you-use/include-what-you-use/issues/166
   { include: [ "<ext/alloc_traits.h>", private, "<vector>", public ] },
-  { include: [ "<memory>", public, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<cmComputeComponentGraph::TarjanEntry> >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<cmFortranFile> >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<cmGraphEdgeList> >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<cmOrderDirectories::ConflictList> >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<cmStateSnapshot> >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<std::basic_string<char> > >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<std::basic_string<char, std::char_traits<char>, std::allocator<char> > > >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<std::vector<std::basic_string<char>, std::allocator<std::basic_string<char> > > > >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<std::vector<std::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::basic_string<char, std::char_traits<char>, std::allocator<char> > > > > >::value_type", private, "<vector>", public ] },
+  { symbol: [ "std::allocator_traits<std::allocator<uv_stdio_container_s> >::value_type", private, "<vector>", public ] },
 
   # TODO: enable this block and remove some <utility> includes?
   #{ symbol: [ "std::pair", private, "<utility>", public ] },
   #{ symbol: [ "std::pair", private, "<map>", public ] },
   #{ symbol: [ "std::pair", private, "<set>", public ] },
 
+  # HACK: iwyu wrongly thinks that <system_error> is needed for std::hash
+  { symbol: [ "std::hash", private, "<functional>", public ] },
+
+  # HACK: iwyu thinks we use a libstdc++ private type
+  { symbol: [ "__gnu_cxx::size_t", private, "<cstddef>", public ] },
+
   # __decay_and_strip is used internally in the C++11 standard library.
   # IWYU does not classify it as internal and suggests to add <type_traits>.
   # To ignore it, we simply map it to a file that is included anyway.
+  # Use '-Xiwyu -v7' to see the fully qualified names that need this.
   # TODO: Can this be simplified with an @-expression?
   #{ symbol: [ "@std::__decay_and_strip<.*>::__type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::__decay_and_strip<char const (&)[1]>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<cmCommand *&>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<cmGeneratorTarget *&>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<cmFindCommon::PathLabel &>::__type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::__decay_and_strip<cmSearchPath>::__type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::__decay_and_strip<cm::string_view>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<std::basic_string<char> &>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<const std::basic_string<char> &>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<cmFindPackageCommand::PathLabel &>::__type", private, "\"cmConfigure.h\"", public ] },
   { symbol: [ "std::__decay_and_strip<__gnu_cxx::__normal_iterator<const cmCTestTestHandler::cmCTestTestProperties *, std::vector<cmCTestTestHandler::cmCTestTestProperties, std::allocator<cmCTestTestHandler::cmCTestTestProperties> > > &>::__type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::__success_type<std::chrono::duration<double, std::ratio<1, 1> > >::type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::__success_type<std::chrono::duration<long, std::ratio<1, 1000000000> > >::type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::enable_if<true, std::chrono::duration<long, std::ratio<1, 1> > >::type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::enable_if<true, std::chrono::duration<long, std::ratio<60, 1> > >::type", private, "\"cmConfigure.h\"", public ] },
+  { symbol: [ "std::enable_if<true, std::chrono::duration<long, std::ratio<1, 1000> > >::type", private, "\"cmConfigure.h\"", public ] },
 
   # KWIML
   { include: [ "<stdint.h>", public, "\"cm_kwiml.h\"", public ] },
   { include: [ "<inttypes.h>", public, "\"cm_kwiml.h\"", public ] },
 
   # Self-sufficient wrapper for <sys/stat.h>
-  { include: [ "<sys/stat.h>", public, "\"cm_sys_stat.h\"", public ] },
   { symbol: [ "mode_t", private, "\"cm_sys_stat.h\"", public ] },
 
   # Wrappers for 3rd-party libraries used from the system.
@@ -81,12 +108,9 @@
   { include: [ "<json/writer.h>", private, "\"cm_jsoncpp_writer.h\"", public ] },
   { include: [ "<rhash.h>", private, "\"cm_rhash.h\"", public ] },
   { include: [ "<uv.h>", private, "\"cm_uv.h\"", public ] },
-  { include: [ "@<uv-.+\\.h>", private, "\"cm_uv.h\"", public ] },
+  { include: [ "@<uv[/-].+\\.h>", private, "\"cm_uv.h\"", public ] },
   { include: [ "<kwiml/abi.h>", private, "\"cm_kwiml.h\"", public ] },
   { include: [ "<kwiml/int.h>", private, "\"cm_kwiml.h\"", public ] },
-  { include: [ "<xmlrpc.h>", private, "\"cm_xmlrpc.h\"", public ] },
-  { include: [ "<xmlrpc_client.h>", private, "\"cm_xmlrpc.h\"", public ] },
-  { include: [ "@<xmlrpc-c/.+\\.h>", private, "\"cm_xmlrpc.h\"", public ] },
   { include: [ "<zconf.h>", private, "\"cm_zlib.h\"", public ] },
   { include: [ "<zlib.h>", private, "\"cm_zlib.h\"", public ] },
 
@@ -101,7 +125,7 @@
   { include: [ "\"cmjsoncpp/include/json/writer.h\"", private, "\"cm_jsoncpp_writer.h\"", public ] },
   { include: [ "\"cmlibrhash/librhash/rhash.h\"", private, "\"cm_rhash.h\"", public ] },
   { include: [ "\"cmlibuv/include/uv.h\"", private, "\"cm_uv.h\"", public ] },
-  { include: [ "@\"cmlibuv/include/uv-.+\\.h\"", private, "\"cm_uv.h\"", public ] },
+  { include: [ "@\"cmlibuv/include/uv/.+\\.h\"", private, "\"cm_uv.h\"", public ] },
   { include: [ "\"KWIML/include/kwiml/abi.h\"", private, "\"cm_kwiml.h\"", public ] },
   { include: [ "\"KWIML/include/kwiml/int.h\"", private, "\"cm_kwiml.h\"", public ] },
   { include: [ "\"cmzlib/cm_zlib_mangle.h\"", private, "\"cm_zlib.h\"", public ] },
@@ -112,6 +136,8 @@
   { symbol: [ "SIGHUP", private, "\"cm_uv.h\"", public ] },
   { symbol: [ "SIGINT", private, "\"cm_uv.h\"", public ] },
   { symbol: [ "ssize_t", private, "\"cm_uv.h\"", public ] },
+
+  { symbol: [ "Json::ArrayIndex", private, "\"cm_jsoncpp_value.h\"", public ] },
 
   { symbol: [ "std::ifstream", private, "\"cmsys/FStream.hxx\"", public ] },
   { symbol: [ "std::ofstream", private, "\"cmsys/FStream.hxx\"", public ] },

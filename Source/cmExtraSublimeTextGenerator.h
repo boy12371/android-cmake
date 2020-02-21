@@ -5,11 +5,11 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmExternalMakefileProjectGenerator.h"
-
 #include <map>
 #include <string>
 #include <vector>
+
+#include "cmExternalMakefileProjectGenerator.h"
 
 class cmGeneratedFileStream;
 class cmGeneratorTarget;
@@ -24,7 +24,7 @@ class cmExtraSublimeTextGenerator : public cmExternalMakefileProjectGenerator
 {
 public:
   static cmExternalMakefileProjectGeneratorFactory* GetFactory();
-  typedef std::map<std::string, std::vector<std::string>> MapSourceFileFlags;
+  using MapSourceFileFlags = std::map<std::string, std::vector<std::string>>;
   cmExtraSublimeTextGenerator();
 
   void Generate() override;
@@ -64,6 +64,12 @@ private:
 
   std::string ComputeDefines(cmSourceFile* source, cmLocalGenerator* lg,
                              cmGeneratorTarget* gtgt);
+
+  std::string ComputeIncludes(cmSourceFile* source, cmLocalGenerator* lg,
+                              cmGeneratorTarget* gtgt);
+
+  bool Open(const std::string& bindir, const std::string& projectName,
+            bool dryRun) override;
 
   bool ExcludeBuildFolder;
   std::string EnvSettings;

@@ -1,6 +1,9 @@
 # Distributed under the OSI-approved BSD 3-Clause License.  See accompanying
 # file Copyright.txt or https://cmake.org/licensing for details.
 
+cmake_policy(PUSH)
+cmake_policy(SET CMP0053 NEW)
+cmake_policy(SET CMP0054 NEW)
 
 # Function parse implicit linker options.
 # This is used internally by CMake and should not be included by user
@@ -44,6 +47,18 @@ function(CMAKE_PARSE_IMPLICIT_LINK_INFO text lib_var dir_var fwk_var log_var obj
       endif()
       separate_arguments(args NATIVE_COMMAND "${line}")
       list(GET args 0 cmd)
+    else()
+      #check to see if the link line is comma-separated instead of space separated
+      string(REGEX REPLACE "," " " line "${line}")
+      if("${line}" MATCHES "${linker_regex}" AND
+        NOT "${line}" MATCHES "${linker_exclude_regex}")
+        separate_arguments(args NATIVE_COMMAND "${line}")
+        list(GET args 0 cmd)
+        if("${cmd}" MATCHES "exec:")
+          # ibm xl sometimes has 'exec: ' in-front of the linker
+          list(GET args 1 cmd)
+        endif()
+      endif()
     endif()
     set(is_msvc 0)
     if("${cmd}" MATCHES "${linker_regex}")
@@ -142,7 +157,7 @@ function(CMAKE_PARSE_IMPLICIT_LINK_INFO text lib_var dir_var fwk_var log_var obj
   # We remove items that are not language-specific.
   set(implicit_libs "")
   foreach(lib IN LISTS implicit_libs_tmp)
-    if("x${lib}" MATCHES "^x(crt.*\\.o|gcc_eh.*|System.*|.*libclang_rt.*|msvcrt.*|libvcruntime.*|libucrt.*|libcmt.*)$")
+    if("x${lib}" MATCHES "^x(crt.*\\.o|gcc_eh.*|.*libgcc_eh.*|System.*|.*libclang_rt.*|msvcrt.*|libvcruntime.*|libucrt.*|libcmt.*)$")
       string(APPEND log "  remove lib [${lib}]\n")
     elseif(IS_ABSOLUTE "${lib}")
       get_filename_component(abs "${lib}" ABSOLUTE)
@@ -185,3 +200,5 @@ function(CMAKE_PARSE_IMPLICIT_LINK_INFO text lib_var dir_var fwk_var log_var obj
   set(${fwk_var} "${implicit_fwks}" PARENT_SCOPE)
   set(${log_var} "${log}" PARENT_SCOPE)
 endfunction()
+
+cmake_policy(POP)

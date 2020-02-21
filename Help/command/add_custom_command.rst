@@ -8,7 +8,9 @@ There are two main signatures for ``add_custom_command``.
 Generating Files
 ^^^^^^^^^^^^^^^^
 
-The first signature is for adding a custom command to produce an output::
+The first signature is for adding a custom command to produce an output:
+
+.. code-block:: cmake
 
   add_custom_command(OUTPUT output1 [output2 ...]
                      COMMAND command1 [ARGS] [args1...]
@@ -21,6 +23,7 @@ The first signature is for adding a custom command to produce an output::
                      [WORKING_DIRECTORY dir]
                      [COMMENT comment]
                      [DEPFILE depfile]
+                     [JOB_POOL job_pool]
                      [VERBATIM] [APPEND] [USES_TERMINAL]
                      [COMMAND_EXPAND_LISTS])
 
@@ -65,9 +68,6 @@ The options are:
   order-only dependencies to ensure the byproducts will be
   available before their dependents build.
 
-  The ``BYPRODUCTS`` option is ignored on non-Ninja generators
-  except to mark byproducts ``GENERATED``.
-
 ``COMMAND``
   Specify the command-line(s) to execute at build time.
   If more than one ``COMMAND`` is specified they will be executed in order,
@@ -79,25 +79,33 @@ The options are:
   will be ignored.
 
   If ``COMMAND`` specifies an executable target name (created by the
-  :command:`add_executable` command) it will automatically be replaced
-  by the location of the executable created at build time. If set, the
-  :prop_tgt:`CROSSCOMPILING_EMULATOR` executable target property will
-  also be prepended to the command to allow the executable to run on
-  the host.
-  (Use the ``TARGET_FILE``
-  :manual:`generator expression <cmake-generator-expressions(7)>` to
-  reference an executable later in the command line.)
-  Additionally a target-level dependency will be added so that the
-  executable target will be built before any target using this custom
-  command.  However this does NOT add a file-level dependency that
-  would cause the custom command to re-run whenever the executable is
-  recompiled.
+  :command:`add_executable` command), it will automatically be replaced
+  by the location of the executable created at build time if either of
+  the following is true:
+
+  * The target is not being cross-compiled (i.e. the
+    :variable:`CMAKE_CROSSCOMPILING` variable is not set to true).
+  * The target is being cross-compiled and an emulator is provided (i.e.
+    its :prop_tgt:`CROSSCOMPILING_EMULATOR` target property is set).
+    In this case, the contents of :prop_tgt:`CROSSCOMPILING_EMULATOR` will be
+    prepended to the command before the location of the target executable.
+
+  If neither of the above conditions are met, it is assumed that the
+  command name is a program to be found on the ``PATH`` at build time.
 
   Arguments to ``COMMAND`` may use
   :manual:`generator expressions <cmake-generator-expressions(7)>`.
-  References to target names in generator expressions imply target-level
-  dependencies, but NOT file-level dependencies.  List target names with
-  the ``DEPENDS`` option to add file-level dependencies.
+  Use the ``TARGET_FILE`` generator expression to refer to the location of
+  a target later in the command line (i.e. as a command argument rather
+  than as the command to execute).
+
+  Whenever a target is used as a command to execute or is mentioned in a
+  generator expression as a command argument, a target-level dependency
+  will be added automatically so that the mentioned target will be built
+  before any target using this custom command.  However this does NOT add
+  a file-level dependency that would cause the custom command to re-run
+  whenever the executable is recompiled.  List target names with
+  the ``DEPENDS`` option to add such file-level dependencies.
 
 ``COMMENT``
   Display the given message before the commands are executed at
@@ -108,6 +116,9 @@ The options are:
   an ``OUTPUT`` of another custom command in the same directory
   (``CMakeLists.txt`` file) CMake automatically brings the other
   custom command into the target in which this command is built.
+  A target-level dependency is added if any dependency is listed as
+  ``BYPRODUCTS`` of a target or any of its build events in the same
+  directory to ensure the byproducts will be available.
   If ``DEPENDS`` is not specified the command will run whenever
   the ``OUTPUT`` is missing; if the command does not actually
   create the ``OUTPUT`` then the rule will always run.
@@ -142,12 +153,21 @@ The options are:
   Note that the ``IMPLICIT_DEPENDS`` option is currently supported
   only for Makefile generators and will be ignored by other generators.
 
+``JOB_POOL``
+  Specify a :prop_gbl:`pool <JOB_POOLS>` for the :generator:`Ninja`
+  generator. Incompatible with ``USES_TERMINAL``, which implies
+  the ``console`` pool.
+  Using a pool that is not defined by :prop_gbl:`JOB_POOLS` causes
+  an error by ninja at build time.
+
 ``MAIN_DEPENDENCY``
   Specify the primary input source file to the command.  This is
   treated just like any value given to the ``DEPENDS`` option
   but also suggests to Visual Studio generators where to hang
-  the custom command.  At most one custom command may specify a
-  given source file as its main dependency.
+  the custom command. Each source file may have at most one command
+  specifying it as its main dependency. A compile command (i.e. for a
+  library or an executable) counts as an implicit main dependency which
+  gets silently overwritten by a custom command specification.
 
 ``OUTPUT``
   Specify the output files the command is expected to produce.
@@ -180,6 +200,9 @@ The options are:
   If it is a relative path it will be interpreted relative to the
   build tree directory corresponding to the current source directory.
 
+  Arguments to ``WORKING_DIRECTORY`` may use
+  :manual:`generator expressions <cmake-generator-expressions(7)>`.
+
 ``DEPFILE``
   Specify a ``.d`` depfile for the :generator:`Ninja` generator.
   A ``.d`` file holds dependencies usually emitted by the custom
@@ -195,7 +218,7 @@ before or after building the target.  The command becomes part of the
 target and will only execute when the target itself is built.  If the
 target is already built, the command will not execute.
 
-::
+.. code-block:: cmake
 
   add_custom_command(TARGET <target>
                      PRE_BUILD | PRE_LINK | POST_BUILD
@@ -204,7 +227,8 @@ target is already built, the command will not execute.
                      [BYPRODUCTS [files...]]
                      [WORKING_DIRECTORY dir]
                      [COMMENT comment]
-                     [VERBATIM] [USES_TERMINAL])
+                     [VERBATIM] [USES_TERMINAL]
+                     [COMMAND_EXPAND_LISTS])
 
 This defines a new command that will be associated with building the
 specified ``<target>``.  The ``<target>`` must be defined in the current
@@ -214,10 +238,9 @@ When the command will happen is determined by which
 of the following is specified:
 
 ``PRE_BUILD``
-  Run before any other rules are executed within the target.
-  This is supported only on Visual Studio 8 or later.
-  For all other generators ``PRE_BUILD`` will be treated as
-  ``PRE_LINK``.
+  On :ref:`Visual Studio Generators`, run before any other rules are
+  executed within the target.
+  On other generators, run just before ``PRE_LINK`` commands.
 ``PRE_LINK``
   Run after sources have been compiled but before linking the binary
   or running the librarian or archiver tool of a static library.

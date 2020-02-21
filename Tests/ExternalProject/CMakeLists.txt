@@ -421,7 +421,7 @@ if(do_git_tests)
 
   set(local_git_repo "../../LocalRepositories/GIT-with-submodules")
 
-  set(proj TS1-GIT-no-GIT_SUBMODULES)
+  set(proj TS1-GIT-all-GIT_SUBMODULES)
   ExternalProject_Add(${proj}
     GIT_REPOSITORY "${local_git_repo}"
     CMAKE_GENERATOR "${CMAKE_GENERATOR}"
@@ -435,7 +435,8 @@ if(do_git_tests)
   )
   set_property(TARGET ${proj} PROPERTY FOLDER "GIT")
 
-  set(proj TS1-GIT-empty-GIT_SUBMODULES)
+  set(proj TS1-GIT-all-GIT_SUBMODULES-via-CMP0097-OLD)
+  cmake_policy(SET CMP0097 OLD)
   ExternalProject_Add(${proj}
     GIT_REPOSITORY "${local_git_repo}"
     GIT_SUBMODULES ""
@@ -443,6 +444,22 @@ if(do_git_tests)
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                -DWITH_m1:BOOL=ON
                -DWITH_m2:BOOL=ON
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    DEPENDS "SetupLocalGITRepository"
+            "SetupLocalGITRepositoryWithSubmodules"
+  )
+  set_property(TARGET ${proj} PROPERTY FOLDER "GIT")
+
+  set(proj TS1-GIT-no-GIT_SUBMODULES)
+  cmake_policy(SET CMP0097 NEW)
+  ExternalProject_Add(${proj}
+    GIT_REPOSITORY "${local_git_repo}"
+    GIT_SUBMODULES ""
+    CMAKE_GENERATOR "${CMAKE_GENERATOR}"
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+               -DWITH_m1:BOOL=OFF
+               -DWITH_m2:BOOL=OFF
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
     DEPENDS "SetupLocalGITRepository"
@@ -624,6 +641,24 @@ ExternalProject_Add(${proj}
   CONFIGURE_COMMAND "${configure_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "configure"
   BUILD_COMMAND "${build_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "build"
   INSTALL_COMMAND "${install_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "install"
+  LOG_DOWNLOAD 1
+  LOG_PATCH 1
+  LOG_UPDATE 1
+  LOG_CONFIGURE 1
+  LOG_BUILD 1
+  LOG_INSTALL 1
+  )
+
+set(proj ExternalProject-log-dir)
+ExternalProject_Add(${proj}
+  DOWNLOAD_COMMAND "${download_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "download"
+  PATCH_COMMAND "${patch_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "patch"
+  UPDATE_COMMAND "${update_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "update"
+  CONFIGURE_COMMAND "${configure_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "configure"
+  BUILD_COMMAND "${build_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "build"
+  INSTALL_COMMAND "${install_cmd}" COMMAND "${CMAKE_COMMAND}" -E echo "install"
+  LOG_MERGED_STDOUTERR 1
+  LOG_DIR ${CMAKE_CURRENT_BINARY_DIR}/different_log
   LOG_DOWNLOAD 1
   LOG_PATCH 1
   LOG_UPDATE 1

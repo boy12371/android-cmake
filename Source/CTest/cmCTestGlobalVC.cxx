@@ -2,12 +2,12 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCTestGlobalVC.h"
 
+#include <ostream>
+#include <utility>
+
 #include "cmCTest.h"
 #include "cmSystemTools.h"
 #include "cmXMLWriter.h"
-
-#include <ostream>
-#include <utility>
 
 cmCTestGlobalVC::cmCTestGlobalVC(cmCTest* ct, std::ostream& log)
   : cmCTestVC(ct, log)
@@ -15,9 +15,7 @@ cmCTestGlobalVC::cmCTestGlobalVC(cmCTest* ct, std::ostream& log)
   this->PriorRev = this->Unknown;
 }
 
-cmCTestGlobalVC::~cmCTestGlobalVC()
-{
-}
+cmCTestGlobalVC::~cmCTestGlobalVC() = default;
 
 const char* cmCTestGlobalVC::LocalPath(std::string const& path)
 {
@@ -118,4 +116,9 @@ bool cmCTestGlobalVC::WriteXMLUpdates(cmXMLWriter& xml)
   }
 
   return result;
+}
+
+void cmCTestGlobalVC::SetNewRevision(std::string const& revision)
+{
+  this->NewRevision = revision;
 }

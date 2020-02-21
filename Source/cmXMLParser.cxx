@@ -2,12 +2,14 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmXMLParser.h"
 
-#include "cm_expat.h"
-#include "cmsys/FStream.hxx"
-#include <ctype.h>
+#include <cctype>
+#include <cstring>
 #include <iostream>
 #include <sstream>
-#include <string.h>
+
+#include "cmsys/FStream.hxx"
+
+#include "cm_expat.h"
 
 cmXMLParser::cmXMLParser()
 {
@@ -186,8 +188,8 @@ void cmXMLParserCharacterDataHandler(void* parser, const char* data,
 void cmXMLParser::ReportXmlParseError()
 {
   XML_Parser parser = static_cast<XML_Parser>(this->Parser);
-  this->ReportError(XML_GetCurrentLineNumber(parser),
-                    XML_GetCurrentColumnNumber(parser),
+  this->ReportError(static_cast<int>(XML_GetCurrentLineNumber(parser)),
+                    static_cast<int>(XML_GetCurrentColumnNumber(parser)),
                     XML_ErrorString(XML_GetErrorCode(parser)));
 }
 

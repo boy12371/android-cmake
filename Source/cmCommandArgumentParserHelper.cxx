@@ -2,32 +2,23 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCommandArgumentParserHelper.h"
 
+#include <cstring>
+#include <iostream>
+#include <sstream>
+
 #include "cmCommandArgumentLexer.h"
 #include "cmMakefile.h"
 #include "cmState.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
-#include "cmake.h"
-
-#include <iostream>
-#include <sstream>
-#include <string.h>
 
 int cmCommandArgument_yyparse(yyscan_t yyscanner);
 //
 cmCommandArgumentParserHelper::cmCommandArgumentParserHelper()
 {
-  this->WarnUninitialized = false;
-  this->CheckSystemVars = false;
   this->FileLine = -1;
   this->FileName = nullptr;
   this->RemoveEmpty = true;
-  this->EmptyVariable[0] = 0;
-  strcpy(this->DCURLYVariable, "${");
-  strcpy(this->RCURLYVariable, "}");
-  strcpy(this->ATVariable, "@");
-  strcpy(this->DOLLARVariable, "$");
-  strcpy(this->LCURLYVariable, "{");
-  strcpy(this->BSLASHVariable, "\\");
 
   this->NoEscapeMode = false;
   this->ReplaceAtSyntax = false;
@@ -44,10 +35,10 @@ void cmCommandArgumentParserHelper::SetLineFile(long line, const char* file)
   this->FileName = file;
 }
 
-char* cmCommandArgumentParserHelper::AddString(const std::string& str)
+const char* cmCommandArgumentParserHelper::AddString(const std::string& str)
 {
   if (str.empty()) {
-    return this->EmptyVariable;
+    return "";
   }
   char* stVal = new char[str.size() + 1];
   strcpy(stVal, str.c_str());
@@ -55,34 +46,34 @@ char* cmCommandArgumentParserHelper::AddString(const std::string& str)
   return stVal;
 }
 
-char* cmCommandArgumentParserHelper::ExpandSpecialVariable(const char* key,
-                                                           const char* var)
+const char* cmCommandArgumentParserHelper::ExpandSpecialVariable(
+  const char* key, const char* var)
 {
   if (!key) {
     return this->ExpandVariable(var);
   }
   if (!var) {
-    return this->EmptyVariable;
+    return "";
   }
   if (strcmp(key, "ENV") == 0) {
     std::string str;
     if (cmSystemTools::GetEnv(var, str)) {
       if (this->EscapeQuotes) {
-        return this->AddString(cmSystemTools::EscapeQuotes(str));
+        return this->AddString(cmEscapeQuotes(str));
       }
       return this->AddString(str);
     }
-    return this->EmptyVariable;
+    return "";
   }
   if (strcmp(key, "CACHE") == 0) {
-    if (const char* c =
+    if (const std::string* c =
           this->Makefile->GetState()->GetInitializedCacheValue(var)) {
       if (this->EscapeQuotes) {
-        return this->AddString(cmSystemTools::EscapeQuotes(c));
+        return this->AddString(cmEscapeQuotes(*c));
       }
-      return this->AddString(c);
+      return this->AddString(*c);
     }
-    return this->EmptyVariable;
+    return "";
   }
   std::ostringstream e;
   e << "Syntax $" << key << "{} is not supported.  "
@@ -91,45 +82,32 @@ char* cmCommandArgumentParserHelper::ExpandSpecialVariable(const char* key,
   return nullptr;
 }
 
-char* cmCommandArgumentParserHelper::ExpandVariable(const char* var)
+const char* cmCommandArgumentParserHelper::ExpandVariable(const char* var)
 {
   if (!var) {
     return nullptr;
   }
   if (this->FileLine >= 0 && strcmp(var, "CMAKE_CURRENT_LIST_LINE") == 0) {
-    std::ostringstream ostr;
-    ostr << this->FileLine;
-    return this->AddString(ostr.str());
+    return this->AddString(std::to_string(this->FileLine));
   }
   const char* value = this->Makefile->GetDefinition(var);
-  if (!value && !this->RemoveEmpty) {
-    // check to see if we need to print a warning
-    // if strict mode is on and the variable has
-    // not been "cleared"/initialized with a set(foo ) call
-    if (this->WarnUninitialized && !this->Makefile->VariableInitialized(var)) {
-      if (this->CheckSystemVars ||
-          cmSystemTools::IsSubDirectory(this->FileName,
-                                        this->Makefile->GetHomeDirectory()) ||
-          cmSystemTools::IsSubDirectory(
-            this->FileName, this->Makefile->GetHomeOutputDirectory())) {
-        std::ostringstream msg;
-        msg << "uninitialized variable \'" << var << "\'";
-        this->Makefile->IssueMessage(cmake::AUTHOR_WARNING, msg.str());
-      }
+  if (!value) {
+    this->Makefile->MaybeWarnUninitialized(var, this->FileName);
+    if (!this->RemoveEmpty) {
+      return nullptr;
     }
-    return nullptr;
   }
   if (this->EscapeQuotes && value) {
-    return this->AddString(cmSystemTools::EscapeQuotes(value));
+    return this->AddString(cmEscapeQuotes(value));
   }
   return this->AddString(value ? value : "");
 }
 
-char* cmCommandArgumentParserHelper::ExpandVariableForAt(const char* var)
+const char* cmCommandArgumentParserHelper::ExpandVariableForAt(const char* var)
 {
   if (this->ReplaceAtSyntax) {
     // try to expand the variable
-    char* ret = this->ExpandVariable(var);
+    const char* ret = this->ExpandVariable(var);
     // if the return was 0 and we want to replace empty strings
     // then return an empty string
     if (!ret && this->RemoveEmpty) {
@@ -144,13 +122,12 @@ char* cmCommandArgumentParserHelper::ExpandVariableForAt(const char* var)
   // - this->ReplaceAtSyntax is false
   // - this->ReplaceAtSyntax is true, but this->RemoveEmpty is false,
   //   and the variable was not defined
-  std::string ref = "@";
-  ref += var;
-  ref += "@";
+  std::string ref = cmStrCat('@', var, '@');
   return this->AddString(ref);
 }
 
-char* cmCommandArgumentParserHelper::CombineUnions(char* in1, char* in2)
+const char* cmCommandArgumentParserHelper::CombineUnions(const char* in1,
+                                                         const char* in2)
 {
   if (!in1) {
     return in2;
@@ -176,10 +153,11 @@ void cmCommandArgumentParserHelper::AllocateParserType(
   if (len == 0) {
     return;
   }
-  pt->str = new char[len + 1];
-  strncpy(pt->str, str, len);
-  pt->str[len] = 0;
-  this->Variables.push_back(pt->str);
+  char* out = new char[len + 1];
+  memcpy(out, str, len);
+  out[len] = 0;
+  pt->str = out;
+  this->Variables.push_back(out);
 }
 
 bool cmCommandArgumentParserHelper::HandleEscapeSymbol(
@@ -257,7 +235,6 @@ int cmCommandArgumentParserHelper::ParseString(const char* str, int verb)
 
 void cmCommandArgumentParserHelper::CleanupParser()
 {
-  std::vector<char*>::iterator sit;
   for (char* var : this->Variables) {
     delete[] var;
   }
@@ -291,8 +268,6 @@ void cmCommandArgumentParserHelper::Error(const char* str)
 void cmCommandArgumentParserHelper::SetMakefile(const cmMakefile* mf)
 {
   this->Makefile = mf;
-  this->WarnUninitialized = mf->GetCMakeInstance()->GetWarnUninitialized();
-  this->CheckSystemVars = mf->GetCMakeInstance()->GetCheckSystemVars();
 }
 
 void cmCommandArgumentParserHelper::SetResult(const char* value)

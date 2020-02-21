@@ -2,20 +2,24 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmFindBase.h"
 
+#include <cstddef>
 #include <deque>
 #include <iostream>
-#include <iterator>
 #include <map>
-#include <stddef.h>
 
 #include "cmAlgorithms.h"
 #include "cmMakefile.h"
+#include "cmRange.h"
 #include "cmSearchPath.h"
 #include "cmState.h"
 #include "cmStateTypes.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
-cmFindBase::cmFindBase()
+class cmExecutionStatus;
+
+cmFindBase::cmFindBase(cmExecutionStatus& status)
+  : cmFindCommon(status)
 {
   this->AlreadyInCache = false;
   this->AlreadyInCacheWithoutMetaInfo = false;
@@ -67,7 +71,8 @@ bool cmFindBase::ParseArguments(std::vector<std::string> const& argsIn)
   }
   this->AlreadyInCache = false;
 
-  this->SelectDefaultNoPackageRootPath();
+  // Find what search path locations have been enabled/disable
+  this->SelectDefaultSearchModes();
 
   // Find the current root path mode.
   this->SelectDefaultRootPathMode();
@@ -131,25 +136,24 @@ bool cmFindBase::ParseArguments(std::vector<std::string> const& argsIn)
       this->VariableDocumentation += "the (unknown) library be found";
     } else if (this->Names.size() == 1) {
       this->VariableDocumentation +=
-        "the " + this->Names[0] + " library be found";
+        "the " + this->Names.front() + " library be found";
     } else {
       this->VariableDocumentation += "one of the ";
       this->VariableDocumentation +=
         cmJoin(cmMakeRange(this->Names).retreat(1), ", ");
       this->VariableDocumentation +=
-        " or " + this->Names[this->Names.size() - 1] + " libraries be found";
+        " or " + this->Names.back() + " libraries be found";
     }
   }
 
   // look for old style
   // FIND_*(VAR name path1 path2 ...)
-  if (!newStyle) {
+  if (!newStyle && !this->Names.empty()) {
     // All the short-hand arguments have been recorded as names.
     std::vector<std::string> shortArgs = this->Names;
     this->Names.clear(); // clear out any values in Names
     this->Names.push_back(shortArgs[0]);
-    this->UserGuessArgs.insert(this->UserGuessArgs.end(),
-                               shortArgs.begin() + 1, shortArgs.end());
+    cmAppend(this->UserGuessArgs, shortArgs.begin() + 1, shortArgs.end());
   }
   this->ExpandPaths();
 
@@ -188,9 +192,7 @@ void cmFindBase::FillCMakeEnvironmentPath()
   cmSearchPath& paths = this->LabeledPaths[PathLabel::CMakeEnvironment];
 
   // Add CMAKE_*_PATH environment variables
-  std::string var = "CMAKE_";
-  var += this->CMakePathName;
-  var += "_PATH";
+  std::string var = cmStrCat("CMAKE_", this->CMakePathName, "_PATH");
   paths.AddEnvPrefixPath("CMAKE_PREFIX_PATH");
   paths.AddEnvPath(var);
 
@@ -206,16 +208,10 @@ void cmFindBase::FillPackageRootPath()
 {
   cmSearchPath& paths = this->LabeledPaths[PathLabel::PackageRoot];
 
-  // Add package specific search prefixes
-  // NOTE: This should be using const_reverse_iterator but HP aCC and
-  //       Oracle sunCC both currently have standard library issues
-  //       with the reverse iterator APIs.
-  for (std::deque<std::string>::reverse_iterator pkg =
-         this->Makefile->FindPackageModuleStack.rbegin();
-       pkg != this->Makefile->FindPackageModuleStack.rend(); ++pkg) {
-    std::string varName = *pkg + "_ROOT";
-    paths.AddCMakePrefixPath(varName);
-    paths.AddEnvPrefixPath(varName);
+  // Add the PACKAGE_ROOT_PATH from each enclosing find_package call.
+  for (std::vector<std::string> const& pkgPaths :
+       cmReverseRange(this->Makefile->FindPackageRootPathStack)) {
+    paths.AddPrefixPaths(pkgPaths);
   }
 
   paths.AddSuffixes(this->SearchPathSuffixes);
@@ -225,12 +221,10 @@ void cmFindBase::FillCMakeVariablePath()
 {
   cmSearchPath& paths = this->LabeledPaths[PathLabel::CMake];
 
-  // Add CMake varibles of the same name as the previous environment
-  // varibles CMAKE_*_PATH to be used most of the time with -D
+  // Add CMake variables of the same name as the previous environment
+  // variables CMAKE_*_PATH to be used most of the time with -D
   // command line options
-  std::string var = "CMAKE_";
-  var += this->CMakePathName;
-  var += "_PATH";
+  std::string var = cmStrCat("CMAKE_", this->CMakePathName, "_PATH");
   paths.AddCMakePrefixPath("CMAKE_PREFIX_PATH");
   paths.AddCMakePath(var);
 
@@ -262,9 +256,7 @@ void cmFindBase::FillCMakeSystemVariablePath()
 {
   cmSearchPath& paths = this->LabeledPaths[PathLabel::CMakeSystem];
 
-  std::string var = "CMAKE_SYSTEM_";
-  var += this->CMakePathName;
-  var += "_PATH";
+  std::string var = cmStrCat("CMAKE_SYSTEM_", this->CMakePathName, "_PATH");
   paths.AddCMakePrefixPath("CMAKE_SYSTEM_PREFIX_PATH");
   paths.AddCMakePath(var);
 
@@ -329,7 +321,7 @@ bool cmFindBase::CheckForVariableInCache()
         this->Makefile->GetDefinition(this->VariableName)) {
     cmState* state = this->Makefile->GetState();
     const char* cacheEntry = state->GetCacheEntryValue(this->VariableName);
-    bool found = !cmSystemTools::IsNOTFOUND(cacheValue);
+    bool found = !cmIsNOTFOUND(cacheValue);
     bool cached = cacheEntry != nullptr;
     if (found) {
       // If the user specifies the entry on the command line without a

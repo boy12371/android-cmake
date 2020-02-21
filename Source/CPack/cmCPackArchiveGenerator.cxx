@@ -2,27 +2,71 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCPackArchiveGenerator.h"
 
-#include "cmCPackComponentGroup.h"
-#include "cmCPackGenerator.h"
-#include "cmCPackLog.h"
-#include "cmGeneratedFileStream.h"
-#include "cmSystemTools.h"
-#include "cmWorkingDirectory.h"
-
+#include <cstring>
+#include <map>
 #include <ostream>
 #include <utility>
 #include <vector>
 
-cmCPackArchiveGenerator::cmCPackArchiveGenerator(cmArchiveWrite::Compress t,
-                                                 std::string const& format)
+#include "cmCPackComponentGroup.h"
+#include "cmCPackGenerator.h"
+#include "cmCPackLog.h"
+#include "cmGeneratedFileStream.h"
+#include "cmStringAlgorithms.h"
+#include "cmSystemTools.h"
+#include "cmWorkingDirectory.h"
+
+cmCPackGenerator* cmCPackArchiveGenerator::Create7ZGenerator()
 {
-  this->Compress = t;
-  this->ArchiveFormat = format;
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressNone, "7zip",
+                                     ".7z");
 }
 
-cmCPackArchiveGenerator::~cmCPackArchiveGenerator()
+cmCPackGenerator* cmCPackArchiveGenerator::CreateTBZ2Generator()
+{
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressBZip2, "paxr",
+                                     ".tar.bz2");
+}
+
+cmCPackGenerator* cmCPackArchiveGenerator::CreateTGZGenerator()
+{
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressGZip, "paxr",
+                                     ".tar.gz");
+}
+
+cmCPackGenerator* cmCPackArchiveGenerator::CreateTXZGenerator()
+{
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressXZ, "paxr",
+                                     ".tar.xz");
+}
+
+cmCPackGenerator* cmCPackArchiveGenerator::CreateTZGenerator()
+{
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressCompress, "paxr",
+                                     ".tar.Z");
+}
+
+cmCPackGenerator* cmCPackArchiveGenerator::CreateTZSTGenerator()
+{
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressZstd, "paxr",
+                                     ".tar.zst");
+}
+
+cmCPackGenerator* cmCPackArchiveGenerator::CreateZIPGenerator()
+{
+  return new cmCPackArchiveGenerator(cmArchiveWrite::CompressNone, "zip",
+                                     ".zip");
+}
+
+cmCPackArchiveGenerator::cmCPackArchiveGenerator(
+  cmArchiveWrite::Compress compress, std::string format, std::string extension)
+  : Compress(compress)
+  , ArchiveFormat(std::move(format))
+  , OutputExtension(std::move(extension))
 {
 }
+
+cmCPackArchiveGenerator::~cmCPackArchiveGenerator() = default;
 
 std::string cmCPackArchiveGenerator::GetArchiveComponentFileName(
   const std::string& component, bool isGroupName)
@@ -51,6 +95,7 @@ int cmCPackArchiveGenerator::InitializeInternal()
   this->SetOptionIfNotSet("CPACK_INCLUDE_TOPLEVEL_DIRECTORY", "1");
   return this->Superclass::InitializeInternal();
 }
+
 int cmCPackArchiveGenerator::addOneComponentToArchive(
   cmArchiveWrite& archive, cmCPackComponent* component)
 {
@@ -61,10 +106,16 @@ int cmCPackArchiveGenerator::addOneComponentToArchive(
   localToplevel += "/" + component->Name;
   // Change to local toplevel
   cmWorkingDirectory workdir(localToplevel);
+  if (workdir.Failed()) {
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "Failed to change working directory to "
+                    << localToplevel << " : "
+                    << std::strerror(workdir.GetLastResult()) << std::endl);
+    return 0;
+  }
   std::string filePrefix;
   if (this->IsOn("CPACK_COMPONENT_INCLUDE_TOPLEVEL_DIRECTORY")) {
-    filePrefix = this->GetOption("CPACK_PACKAGE_FILE_NAME");
-    filePrefix += "/";
+    filePrefix = cmStrCat(this->GetOption("CPACK_PACKAGE_FILE_NAME"), '/');
   }
   const char* installPrefix =
     this->GetOption("CPACK_PACKAGING_INSTALL_PREFIX");
@@ -78,8 +129,9 @@ int cmCPackArchiveGenerator::addOneComponentToArchive(
     cmCPackLogger(cmCPackLog::LOG_DEBUG, "Adding file: " << rp << std::endl);
     archive.Add(rp, 0, nullptr, false);
     if (!archive) {
-      cmCPackLogger(cmCPackLog::LOG_ERROR, "ERROR while packaging files: "
-                      << archive.GetError() << std::endl);
+      cmCPackLogger(cmCPackLog::LOG_ERROR,
+                    "ERROR while packaging files: " << archive.GetError()
+                                                    << std::endl);
       return 0;
     }
   }
@@ -93,20 +145,23 @@ int cmCPackArchiveGenerator::addOneComponentToArchive(
  */
 #define DECLARE_AND_OPEN_ARCHIVE(filename, archive)                           \
   cmGeneratedFileStream gf;                                                   \
-  gf.Open((filename).c_str(), false, true);                                   \
+  gf.Open((filename), false, true);                                           \
   if (!GenerateHeader(&gf)) {                                                 \
     cmCPackLogger(cmCPackLog::LOG_ERROR,                                      \
-                  "Problem to generate Header for archive < "                 \
+                  "Problem to generate Header for archive <"                  \
                     << (filename) << ">." << std::endl);                      \
     return 0;                                                                 \
   }                                                                           \
   cmArchiveWrite archive(gf, this->Compress, this->ArchiveFormat);            \
-  if (!(archive)) {                                                           \
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem to create archive < "       \
-                    << (filename) << ">. ERROR =" << (archive).GetError()     \
-                    << std::endl);                                            \
-    return 0;                                                                 \
-  }
+  do {                                                                        \
+    if (!(archive)) {                                                         \
+      cmCPackLogger(cmCPackLog::LOG_ERROR,                                    \
+                    "Problem to create archive <"                             \
+                      << (filename) << ">, ERROR = " << (archive).GetError()  \
+                      << std::endl);                                          \
+      return 0;                                                               \
+    }                                                                         \
+  } while (false)
 
 int cmCPackArchiveGenerator::PackageComponents(bool ignoreGroup)
 {
@@ -132,14 +187,15 @@ int cmCPackArchiveGenerator::PackageComponents(bool ignoreGroup)
         }
       }
       // add the generated package to package file names list
-      packageFileNames.push_back(packageFileName);
+      packageFileNames.push_back(std::move(packageFileName));
     }
     // Handle Orphan components (components not belonging to any groups)
     for (auto& comp : this->Components) {
       // Does the component belong to a group?
       if (comp.second.Group == nullptr) {
         cmCPackLogger(
-          cmCPackLog::LOG_VERBOSE, "Component <"
+          cmCPackLog::LOG_VERBOSE,
+          "Component <"
             << comp.second.Name
             << "> does not belong to any group, package it separately."
             << std::endl);
@@ -157,7 +213,7 @@ int cmCPackArchiveGenerator::PackageComponents(bool ignoreGroup)
           addOneComponentToArchive(archive, &(comp.second));
         }
         // add the generated package to package file names list
-        packageFileNames.push_back(packageFileName);
+        packageFileNames.push_back(std::move(packageFileName));
       }
     }
   }
@@ -178,7 +234,7 @@ int cmCPackArchiveGenerator::PackageComponents(bool ignoreGroup)
         addOneComponentToArchive(archive, &(comp.second));
       }
       // add the generated package to package file names list
-      packageFileNames.push_back(packageFileName);
+      packageFileNames.push_back(std::move(packageFileName));
     }
   }
   return 1;
@@ -188,7 +244,7 @@ int cmCPackArchiveGenerator::PackageComponentsAllInOne()
 {
   // reset the package file names
   packageFileNames.clear();
-  packageFileNames.push_back(std::string(toplevel));
+  packageFileNames.emplace_back(toplevel);
   packageFileNames[0] += "/";
 
   if (this->IsSet("CPACK_ARCHIVE_FILE_NAME")) {
@@ -237,15 +293,22 @@ int cmCPackArchiveGenerator::PackageFiles()
   // CASE 3 : NON COMPONENT package.
   DECLARE_AND_OPEN_ARCHIVE(packageFileNames[0], archive);
   cmWorkingDirectory workdir(toplevel);
+  if (workdir.Failed()) {
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "Failed to change working directory to "
+                    << toplevel << " : "
+                    << std::strerror(workdir.GetLastResult()) << std::endl);
+    return 0;
+  }
   for (std::string const& file : files) {
     // Get the relative path to the file
-    std::string rp =
-      cmSystemTools::RelativePath(toplevel.c_str(), file.c_str());
+    std::string rp = cmSystemTools::RelativePath(toplevel, file);
     archive.Add(rp, 0, nullptr, false);
     if (!archive) {
-      cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem while adding file< "
+      cmCPackLogger(cmCPackLog::LOG_ERROR,
+                    "Problem while adding file <"
                       << file << "> to archive <" << packageFileNames[0]
-                      << "> .ERROR =" << archive.GetError() << std::endl);
+                      << ">, ERROR = " << archive.GetError() << std::endl);
       return 0;
     }
   }

@@ -1,15 +1,17 @@
 #include "cmParseJacocoCoverage.h"
 
-#include "cmCTest.h"
-#include "cmCTestCoverageHandler.h"
-#include "cmSystemTools.h"
-#include "cmXMLParser.h"
+#include <cstdlib>
+#include <cstring>
 
 #include "cmsys/Directory.hxx"
 #include "cmsys/FStream.hxx"
 #include "cmsys/Glob.hxx"
-#include <stdlib.h>
-#include <string.h>
+
+#include "cmCTest.h"
+#include "cmCTestCoverageHandler.h"
+#include "cmStringAlgorithms.h"
+#include "cmSystemTools.h"
+#include "cmXMLParser.h"
 
 class cmParseJacocoCoverage::XMLParser : public cmXMLParser
 {
@@ -18,12 +20,7 @@ public:
     : CTest(ctest)
     , Coverage(cont)
   {
-    this->FilePath.clear();
-    this->PackagePath.clear();
-    this->PackageName.clear();
   }
-
-  ~XMLParser() override {}
 
 protected:
   void EndElement(const std::string& /*name*/) override {}
@@ -34,12 +31,14 @@ protected:
       this->PackageName = atts[1];
       this->PackagePath.clear();
     } else if (name == "sourcefile") {
+      this->FilePath.clear();
       std::string fileName = atts[1];
 
       if (this->PackagePath.empty()) {
         if (!this->FindPackagePath(fileName)) {
-          cmCTestLog(this->CTest, ERROR_MESSAGE, "Cannot find file: "
-                       << this->PackageName << "/" << fileName << std::endl);
+          cmCTestLog(this->CTest, ERROR_MESSAGE,
+                     "Cannot find file: " << this->PackageName << "/"
+                                          << fileName << std::endl);
           this->Coverage.Error++;
           return;
         }
@@ -106,9 +105,7 @@ protected:
                                 std::string const& baseDir)
   {
     // Search for the file in the baseDir and its subdirectories.
-    std::string packageGlob = baseDir;
-    packageGlob += "/";
-    packageGlob += fileName;
+    std::string packageGlob = cmStrCat(baseDir, '/', fileName);
     cmsys::Glob gl;
     gl.RecurseOn();
     gl.RecurseThroughSymlinksOn();
@@ -121,7 +118,7 @@ protected:
     // Check if any of the locations found match our package.
     for (std::string const& f : files) {
       std::string dir = cmsys::SystemTools::GetParentDirectory(f);
-      if (cmsys::SystemTools::StringEndsWith(dir, this->PackageName.c_str())) {
+      if (cmHasSuffix(dir, this->PackageName)) {
         cmCTestOptionalLog(this->CTest, HANDLER_VERBOSE_OUTPUT,
                            "Found package directory for " << fileName << ": "
                                                           << dir << std::endl,
@@ -137,8 +134,8 @@ private:
   std::string FilePath;
   std::string PackagePath;
   std::string PackageName;
-  typedef cmCTestCoverageHandlerContainer::SingleFileCoverageVector
-    FileLinesType;
+  using FileLinesType =
+    cmCTestCoverageHandlerContainer::SingleFileCoverageVector;
   cmCTest* CTest;
   cmCTestCoverageHandlerContainer& Coverage;
 };

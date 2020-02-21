@@ -4,12 +4,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cm_jsoncpp_value.h"
-#include "cmake.h"
-
 #include <memory>
 #include <string>
 #include <utility>
+
+#include "cm_jsoncpp_value.h"
+
+#include "cmake.h"
 
 class cmConnection;
 class cmFileMonitor;
@@ -56,9 +57,8 @@ public:
   cmConnection* Connection;
 
 private:
-  cmServerRequest(cmServer* server, cmConnection* connection,
-                  const std::string& t, const std::string& c,
-                  const Json::Value& d);
+  cmServerRequest(cmServer* server, cmConnection* connection, std::string t,
+                  std::string c, Json::Value d);
 
   void ReportProgress(int min, int current, int max,
                       const std::string& message) const;
@@ -72,15 +72,16 @@ private:
 
 class cmServerProtocol
 {
-  CM_DISABLE_COPY(cmServerProtocol)
-
 public:
   cmServerProtocol() = default;
   virtual ~cmServerProtocol() = default;
 
+  cmServerProtocol(cmServerProtocol const&) = delete;
+  cmServerProtocol& operator=(cmServerProtocol const&) = delete;
+
   virtual std::pair<int, int> ProtocolVersion() const = 0;
   virtual bool IsExperimental() const = 0;
-  virtual const cmServerResponse Process(const cmServerRequest& request) = 0;
+  virtual cmServerResponse Process(const cmServerRequest& request) = 0;
 
   bool Activate(cmServer* server, const cmServerRequest& request,
                 std::string* errorMessage);
@@ -106,7 +107,7 @@ class cmServerProtocol1 : public cmServerProtocol
 public:
   std::pair<int, int> ProtocolVersion() const override;
   bool IsExperimental() const override;
-  const cmServerResponse Process(const cmServerRequest& request) override;
+  cmServerResponse Process(const cmServerRequest& request) override;
 
 private:
   bool DoActivate(const cmServerRequest& request,
@@ -123,6 +124,7 @@ private:
   cmServerResponse ProcessGlobalSettings(const cmServerRequest& request);
   cmServerResponse ProcessSetGlobalSettings(const cmServerRequest& request);
   cmServerResponse ProcessFileSystemWatchers(const cmServerRequest& request);
+  cmServerResponse ProcessCTests(const cmServerRequest& request);
 
   enum State
   {
@@ -139,12 +141,10 @@ private:
   {
   public:
     GeneratorInformation() = default;
-    GeneratorInformation(const std::string& generatorName,
-                         const std::string& extraGeneratorName,
-                         const std::string& toolset,
-                         const std::string& platform,
-                         const std::string& sourceDirectory,
-                         const std::string& buildDirectory);
+    GeneratorInformation(std::string generatorName,
+                         std::string extraGeneratorName, std::string toolset,
+                         std::string platform, std::string sourceDirectory,
+                         std::string buildDirectory);
 
     void SetupGenerator(cmake* cm, std::string* errorMessage);
 

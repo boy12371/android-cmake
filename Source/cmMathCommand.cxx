@@ -2,50 +2,119 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmMathCommand.h"
 
-#include <stdio.h>
+#include <cstdio>
 
+#include "cm_kwiml.h"
+
+#include "cmExecutionStatus.h"
 #include "cmExprParserHelper.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 
-class cmExecutionStatus;
+namespace {
+bool HandleExprCommand(std::vector<std::string> const& args,
+                       cmExecutionStatus& status);
+}
 
-bool cmMathCommand::InitialPass(std::vector<std::string> const& args,
-                                cmExecutionStatus&)
+bool cmMathCommand(std::vector<std::string> const& args,
+                   cmExecutionStatus& status)
 {
   if (args.empty()) {
-    this->SetError("must be called with at least one argument.");
+    status.SetError("must be called with at least one argument.");
     return false;
   }
   const std::string& subCommand = args[0];
   if (subCommand == "EXPR") {
-    return this->HandleExprCommand(args);
+    return HandleExprCommand(args, status);
   }
   std::string e = "does not recognize sub-command " + subCommand;
-  this->SetError(e);
+  status.SetError(e);
   return false;
 }
 
-bool cmMathCommand::HandleExprCommand(std::vector<std::string> const& args)
+namespace {
+bool HandleExprCommand(std::vector<std::string> const& args,
+                       cmExecutionStatus& status)
 {
-  if (args.size() != 3) {
-    this->SetError("EXPR called with incorrect arguments.");
+  if ((args.size() != 3) && (args.size() != 5)) {
+    status.SetError("EXPR called with incorrect arguments.");
     return false;
   }
 
+  enum class NumericFormat
+  {
+    UNINITIALIZED,
+    DECIMAL,
+    HEXADECIMAL,
+  };
+
   const std::string& outputVariable = args[1];
   const std::string& expression = args[2];
+  size_t argumentIndex = 3;
+  NumericFormat outputFormat = NumericFormat::UNINITIALIZED;
+
+  status.GetMakefile().AddDefinition(outputVariable, "ERROR");
+
+  if (argumentIndex < args.size()) {
+    const std::string messageHint = "sub-command EXPR ";
+    const std::string option = args[argumentIndex++];
+    if (option == "OUTPUT_FORMAT") {
+      if (argumentIndex < args.size()) {
+        const std::string argument = args[argumentIndex++];
+        if (argument == "DECIMAL") {
+          outputFormat = NumericFormat::DECIMAL;
+        } else if (argument == "HEXADECIMAL") {
+          outputFormat = NumericFormat::HEXADECIMAL;
+        } else {
+          std::string error = messageHint + "value \"" + argument +
+            "\" for option \"" + option + "\" is invalid.";
+          status.SetError(error);
+          return false;
+        }
+      } else {
+        std::string error =
+          messageHint + "missing argument for option \"" + option + "\".";
+        status.SetError(error);
+        return false;
+      }
+    } else {
+      std::string error =
+        messageHint + "option \"" + option + "\" is unknown.";
+      status.SetError(error);
+      return false;
+    }
+  }
+
+  if (outputFormat == NumericFormat::UNINITIALIZED) {
+    outputFormat = NumericFormat::DECIMAL;
+  }
 
   cmExprParserHelper helper;
   if (!helper.ParseString(expression.c_str(), 0)) {
-    std::string e = "cannot parse the expression: \"" + expression + "\": ";
-    e += helper.GetError();
-    this->SetError(e);
+    status.SetError(helper.GetError());
     return false;
   }
 
   char buffer[1024];
-  sprintf(buffer, "%d", helper.GetResult());
+  const char* fmt;
+  switch (outputFormat) {
+    case NumericFormat::HEXADECIMAL:
+      fmt = "0x%" KWIML_INT_PRIx64;
+      break;
+    case NumericFormat::DECIMAL:
+      CM_FALLTHROUGH;
+    default:
+      fmt = "%" KWIML_INT_PRId64;
+      break;
+  }
+  sprintf(buffer, fmt, helper.GetResult());
 
-  this->Makefile->AddDefinition(outputVariable, buffer);
+  std::string const& w = helper.GetWarning();
+  if (!w.empty()) {
+    status.GetMakefile().IssueMessage(MessageType::AUTHOR_WARNING, w);
+  }
+
+  status.GetMakefile().AddDefinition(outputVariable, buffer);
   return true;
+}
 }

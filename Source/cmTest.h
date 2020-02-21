@@ -5,11 +5,11 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmListFileCache.h"
-#include "cmPropertyMap.h"
-
 #include <string>
 #include <vector>
+
+#include "cmListFileCache.h"
+#include "cmPropertyMap.h"
 
 class cmMakefile;
 
@@ -26,14 +26,14 @@ public:
   cmTest(cmMakefile* mf);
   ~cmTest();
 
-  ///! Set the test name
+  //! Set the test name
   void SetName(const std::string& name);
   std::string GetName() const { return this->Name; }
 
   void SetCommand(std::vector<std::string> const& command);
   std::vector<std::string> const& GetCommand() const { return this->Command; }
 
-  ///! Set/Get a property of this source file
+  //! Set/Get a property of this source file
   void SetProperty(const std::string& prop, const char* value);
   void AppendProperty(const std::string& prop, const char* value,
                       bool asString = false);
@@ -51,10 +51,15 @@ public:
   bool GetOldStyle() const { return this->OldStyle; }
   void SetOldStyle(bool b) { this->OldStyle = b; }
 
+  /** Set/Get whether lists in command lines should be expanded. */
+  bool GetCommandExpandLists() const;
+  void SetCommandExpandLists(bool b);
+
 private:
   cmPropertyMap Properties;
   std::string Name;
   std::vector<std::string> Command;
+  bool CommandExpandLists;
 
   bool OldStyle;
 

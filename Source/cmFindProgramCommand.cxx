@@ -4,12 +4,13 @@
 
 #include "cmMakefile.h"
 #include "cmStateTypes.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
 class cmExecutionStatus;
 
 #if defined(__APPLE__)
-#include <CoreFoundation/CoreFoundation.h>
+#  include <CoreFoundation/CoreFoundation.h>
 #endif
 
 struct cmFindProgramHelper
@@ -22,7 +23,7 @@ struct cmFindProgramHelper
     this->Extensions.push_back(".exe");
 #endif
     // Consider original name with no extensions.
-    this->Extensions.push_back("");
+    this->Extensions.emplace_back();
   }
 
   // List of valid extensions.
@@ -34,6 +35,9 @@ struct cmFindProgramHelper
   // Current names under consideration.
   std::vector<std::string> Names;
 
+  // Current name with extension under consideration.
+  std::string TestNameExt;
+
   // Current full path under consideration.
   std::string TestPath;
 
@@ -42,6 +46,19 @@ struct cmFindProgramHelper
   {
     this->Names.clear();
     this->AddName(name);
+  }
+  bool CheckCompoundNames()
+  {
+    for (std::string const& n : this->Names) {
+      // Only perform search relative to current directory if the file name
+      // contains a directory separator.
+      if (n.find('/') != std::string::npos) {
+        if (this->CheckDirectoryForName("", n)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
   bool CheckDirectory(std::string const& path)
   {
@@ -55,14 +72,15 @@ struct cmFindProgramHelper
   bool CheckDirectoryForName(std::string const& path, std::string const& name)
   {
     for (std::string const& ext : this->Extensions) {
-      this->TestPath = path;
-      this->TestPath += name;
-      if (!ext.empty() && cmSystemTools::StringEndsWith(name, ext.c_str())) {
+      if (!ext.empty() && cmHasSuffix(name, ext)) {
         continue;
       }
-      this->TestPath += ext;
+      this->TestNameExt = cmStrCat(name, ext);
+      this->TestPath =
+        cmSystemTools::CollapseFullPath(this->TestNameExt, path);
+
       if (cmSystemTools::FileExists(this->TestPath, true)) {
-        this->BestPath = cmSystemTools::CollapseFullPath(this->TestPath);
+        this->BestPath = this->TestPath;
         return true;
       }
     }
@@ -70,14 +88,14 @@ struct cmFindProgramHelper
   }
 };
 
-cmFindProgramCommand::cmFindProgramCommand()
+cmFindProgramCommand::cmFindProgramCommand(cmExecutionStatus& status)
+  : cmFindBase(status)
 {
   this->NamesPerDirAllowed = true;
 }
 
 // cmFindProgramCommand
-bool cmFindProgramCommand::InitialPass(std::vector<std::string> const& argsIn,
-                                       cmExecutionStatus&)
+bool cmFindProgramCommand::InitialPass(std::vector<std::string> const& argsIn)
 {
   this->VariableDocumentation = "Path to a program.";
   this->CMakePathName = "PROGRAM";
@@ -145,8 +163,8 @@ std::string cmFindProgramCommand::FindNormalProgramNamesPerDir()
     helper.AddName(n);
   }
 
-  // Check for the names themselves (e.g. absolute paths).
-  if (helper.CheckDirectory(std::string())) {
+  // Check for the names themselves if they contain a directory separator.
+  if (helper.CheckCompoundNames()) {
     return helper.BestPath;
   }
 
@@ -168,8 +186,8 @@ std::string cmFindProgramCommand::FindNormalProgramDirsPerName()
     // Switch to searching for this name.
     helper.SetName(n);
 
-    // Check for the name by itself (e.g. an absolute path).
-    if (helper.CheckDirectory(std::string())) {
+    // Check for the names themselves if they contain a directory separator.
+    if (helper.CheckCompoundNames()) {
       return helper.BestPath;
     }
 
@@ -251,4 +269,10 @@ std::string cmFindProgramCommand::GetBundleExecutable(
 #endif
 
   return executable;
+}
+
+bool cmFindProgram(std::vector<std::string> const& args,
+                   cmExecutionStatus& status)
+{
+  return cmFindProgramCommand(status).InitialPass(args);
 }

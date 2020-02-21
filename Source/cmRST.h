@@ -5,12 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmsys/RegularExpression.hxx"
 #include <iosfwd>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
+
+#include "cmsys/RegularExpression.hxx"
 
 /** \class cmRST
  * \brief Perform basic .rst processing for command-line help
@@ -25,7 +26,7 @@
 class cmRST
 {
 public:
-  cmRST(std::ostream& os, std::string const& docroot);
+  cmRST(std::ostream& os, std::string docroot);
   bool ProcessFile(std::string const& fname, bool isModule = false);
 
 private:
@@ -85,6 +86,8 @@ private:
   cmsys::RegularExpression NoteDirective;
   cmsys::RegularExpression ModuleRST;
   cmsys::RegularExpression CMakeRole;
+  cmsys::RegularExpression InlineLink;
+  cmsys::RegularExpression InlineLiteral;
   cmsys::RegularExpression Substitution;
   cmsys::RegularExpression TocTreeLink;
 

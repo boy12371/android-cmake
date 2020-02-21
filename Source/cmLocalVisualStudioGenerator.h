@@ -6,7 +6,7 @@
 #include "cmConfigure.h" // IWYU pragma: keep
 
 #include <map>
-#include <memory> // IWYU pragma: keep
+#include <memory>
 #include <string>
 
 #include "cmGlobalVisualStudioGenerator.h"
@@ -44,11 +44,9 @@ public:
   virtual std::string ComputeLongestObjectDirectory(
     cmGeneratorTarget const*) const = 0;
 
-  virtual void AddCMakeListsRules() = 0;
-
-  virtual void ComputeObjectFilenames(
+  void ComputeObjectFilenames(
     std::map<cmSourceFile const*, std::string>& mapping,
-    cmGeneratorTarget const* = 0);
+    cmGeneratorTarget const* = 0) override;
 
 protected:
   virtual const char* ReportErrorLabel() const;

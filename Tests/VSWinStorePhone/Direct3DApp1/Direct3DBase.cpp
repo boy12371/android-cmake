@@ -1,6 +1,8 @@
+// clang-format off
 #include "pch.h"
 
 #include "Direct3DBase.h"
+// clang-format on
 
 using namespace DirectX;
 using namespace Microsoft::WRL;
@@ -101,12 +103,12 @@ void Direct3DBase::CreateWindowSizeDependentResources()
 #if WINVER > 0x0602
   m_orientation = DisplayInformation::GetForCurrentView()->CurrentOrientation;
 #else
-#if PHONE
+#  if PHONE
   // WP8 doesn't support rotations so always make it landscape
   m_orientation = DisplayOrientations::Landscape;
-#else
+#  else
   m_orientation = DisplayProperties::CurrentOrientation;
-#endif
+#  endif
 #endif
   bool swapDimensions = m_orientation == DisplayOrientations::Portrait ||
     m_orientation == DisplayOrientations::PortraitFlipped;

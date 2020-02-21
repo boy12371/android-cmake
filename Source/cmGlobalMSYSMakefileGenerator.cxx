@@ -7,6 +7,7 @@
 #include "cmDocumentationEntry.h"
 #include "cmLocalUnixMakefileGenerator3.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 #include "cmState.h"
 #include "cmake.h"
 
@@ -23,8 +24,7 @@ cmGlobalMSYSMakefileGenerator::cmGlobalMSYSMakefileGenerator(cmake* cm)
 std::string cmGlobalMSYSMakefileGenerator::FindMinGW(
   std::string const& makeloc)
 {
-  std::string fstab = makeloc;
-  fstab += "/../etc/fstab";
+  std::string fstab = cmStrCat(makeloc, "/../etc/fstab");
   cmsys::ifstream fin(fstab.c_str());
   std::string path;
   std::string mount;
@@ -33,8 +33,7 @@ std::string cmGlobalMSYSMakefileGenerator::FindMinGW(
     fin >> path;
     fin >> mount;
     if (mount == "/mingw") {
-      mingwBin = path;
-      mingwBin += "/bin";
+      mingwBin = cmStrCat(path, "/bin");
     }
   }
   return mingwBin;
@@ -44,9 +43,10 @@ void cmGlobalMSYSMakefileGenerator::EnableLanguage(
   std::vector<std::string> const& l, cmMakefile* mf, bool optional)
 {
   this->FindMakeProgram(mf);
-  std::string makeProgram = mf->GetRequiredDefinition("CMAKE_MAKE_PROGRAM");
+  const std::string& makeProgram =
+    mf->GetRequiredDefinition("CMAKE_MAKE_PROGRAM");
   std::vector<std::string> locations;
-  std::string makeloc = cmSystemTools::GetProgramPath(makeProgram.c_str());
+  std::string makeloc = cmSystemTools::GetProgramPath(makeProgram);
   locations.push_back(this->FindMinGW(makeloc));
   locations.push_back(makeloc);
   locations.push_back("/mingw/bin");
@@ -67,16 +67,16 @@ void cmGlobalMSYSMakefileGenerator::EnableLanguage(
     rc = trc;
   }
   mf->AddDefinition("MSYS", "1");
-  mf->AddDefinition("CMAKE_GENERATOR_CC", gcc.c_str());
-  mf->AddDefinition("CMAKE_GENERATOR_CXX", gxx.c_str());
-  mf->AddDefinition("CMAKE_GENERATOR_RC", rc.c_str());
+  mf->AddDefinition("CMAKE_GENERATOR_CC", gcc);
+  mf->AddDefinition("CMAKE_GENERATOR_CXX", gxx);
+  mf->AddDefinition("CMAKE_GENERATOR_RC", rc);
   this->cmGlobalUnixMakefileGenerator3::EnableLanguage(l, mf, optional);
 
   if (!mf->IsSet("CMAKE_AR") && !this->CMakeInstance->GetIsInTryCompile() &&
       !(1 == l.size() && l[0] == "NONE")) {
     cmSystemTools::Error(
-      "CMAKE_AR was not found, please set to archive program. ",
-      mf->GetDefinition("CMAKE_AR"));
+      "CMAKE_AR was not found, please set to archive program. " +
+      mf->GetSafeDefinition("CMAKE_AR"));
   }
 }
 

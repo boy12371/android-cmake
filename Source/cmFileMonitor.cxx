@@ -2,13 +2,14 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmFileMonitor.h"
 
-#include "cmAlgorithms.h"
-#include "cmsys/SystemTools.hxx"
-
 #include <cassert>
-#include <stddef.h>
+#include <cstddef>
 #include <unordered_map>
 #include <utility>
+
+#include "cmsys/SystemTools.hxx"
+
+#include "cmAlgorithms.h"
 
 namespace {
 void on_directory_change(uv_fs_event_t* handle, const char* filename,
@@ -19,7 +20,6 @@ void on_fs_close(uv_handle_t* handle);
 class cmIBaseWatcher
 {
 public:
-  cmIBaseWatcher() = default;
   virtual ~cmIBaseWatcher() = default;
 
   virtual void Trigger(const std::string& pathSegment, int events,
@@ -148,11 +148,6 @@ public:
     assert(!ps.empty());
 
     p->AddChildWatcher(ps, this);
-  }
-
-  ~cmRealDirectoryWatcher() override
-  {
-    // Handle is freed via uv_handle_close callback!
   }
 
   void StartWatching() final
@@ -315,6 +310,7 @@ void cmFileMonitor::MonitorPaths(const std::vector<std::string>& paths,
   for (std::string const& p : paths) {
     std::vector<std::string> pathSegments;
     cmsys::SystemTools::SplitPath(p, pathSegments, true);
+    const bool pathIsFile = !cmsys::SystemTools::FileIsDirectory(p);
 
     const size_t segmentCount = pathSegments.size();
     if (segmentCount < 2) { // Expect at least rootdir and filename
@@ -324,7 +320,7 @@ void cmFileMonitor::MonitorPaths(const std::vector<std::string>& paths,
     for (size_t i = 0; i < segmentCount; ++i) {
       assert(currentWatcher);
 
-      const bool fileSegment = (i == segmentCount - 1);
+      const bool fileSegment = (i == segmentCount - 1 && pathIsFile);
       const bool rootSegment = (i == 0);
       assert(
         !(fileSegment &&

@@ -2,14 +2,27 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCTestCoverageCommand.h"
 
+#include <set>
+
+#include "cm_static_string_view.hxx"
+
+#include "cmAlgorithms.h"
 #include "cmCTest.h"
 #include "cmCTestCoverageHandler.h"
 
 class cmCTestGenericHandler;
 
-cmCTestCoverageCommand::cmCTestCoverageCommand()
+void cmCTestCoverageCommand::BindArguments()
 {
-  this->LabelsMentioned = false;
+  this->cmCTestHandlerCommand::BindArguments();
+  this->Bind("LABELS"_s, this->Labels);
+}
+
+void cmCTestCoverageCommand::CheckArguments(
+  std::vector<std::string> const& keywords)
+{
+  this->LabelsMentioned =
+    !this->Labels.empty() || cmContains(keywords, "LABELS");
 }
 
 cmCTestGenericHandler* cmCTestCoverageCommand::InitializeHandler()
@@ -19,43 +32,15 @@ cmCTestGenericHandler* cmCTestCoverageCommand::InitializeHandler()
   this->CTest->SetCTestConfigurationFromCMakeVariable(
     this->Makefile, "CoverageExtraFlags", "CTEST_COVERAGE_EXTRA_FLAGS",
     this->Quiet);
-  cmCTestCoverageHandler* handler = static_cast<cmCTestCoverageHandler*>(
-    this->CTest->GetInitializedHandler("coverage"));
-  if (!handler) {
-    this->SetError("internal CTest error. Cannot instantiate test handler");
-    return nullptr;
-  }
+  cmCTestCoverageHandler* handler = this->CTest->GetCoverageHandler();
+  handler->Initialize();
 
   // If a LABELS option was given, select only files with the labels.
   if (this->LabelsMentioned) {
-    handler->SetLabelFilter(this->Labels);
+    handler->SetLabelFilter(
+      std::set<std::string>(this->Labels.begin(), this->Labels.end()));
   }
 
   handler->SetQuiet(this->Quiet);
   return handler;
-}
-
-bool cmCTestCoverageCommand::CheckArgumentKeyword(std::string const& arg)
-{
-  // Look for arguments specific to this command.
-  if (arg == "LABELS") {
-    this->ArgumentDoing = ArgumentDoingLabels;
-    this->LabelsMentioned = true;
-    return true;
-  }
-
-  // Look for other arguments.
-  return this->Superclass::CheckArgumentKeyword(arg);
-}
-
-bool cmCTestCoverageCommand::CheckArgumentValue(std::string const& arg)
-{
-  // Handle states specific to this command.
-  if (this->ArgumentDoing == ArgumentDoingLabels) {
-    this->Labels.insert(arg);
-    return true;
-  }
-
-  // Look for other arguments.
-  return this->Superclass::CheckArgumentValue(arg);
 }

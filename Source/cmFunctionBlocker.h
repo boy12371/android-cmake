@@ -3,6 +3,12 @@
 #ifndef cmFunctionBlocker_h
 #define cmFunctionBlocker_h
 
+#include "cmConfigure.h" // IWYU pragma: keep
+
+#include <vector>
+
+#include <cm/string_view>
+
 #include "cmListFileCache.h"
 
 class cmExecutionStatus;
@@ -14,19 +20,10 @@ public:
   /**
    * should a function be blocked
    */
-  virtual bool IsFunctionBlocked(const cmListFileFunction& lff, cmMakefile& mf,
-                                 cmExecutionStatus& status) = 0;
+  bool IsFunctionBlocked(cmListFileFunction const& lff,
+                         cmExecutionStatus& status);
 
-  /**
-   * should this function blocker be removed, useful when one function adds a
-   * blocker and another must remove it
-   */
-  virtual bool ShouldRemove(const cmListFileFunction&, cmMakefile&)
-  {
-    return false;
-  }
-
-  virtual ~cmFunctionBlocker() {}
+  virtual ~cmFunctionBlocker() = default;
 
   /** Set/Get the context in which this blocker is created.  */
   void SetStartingContext(cmListFileContext const& lfc)
@@ -39,7 +36,19 @@ public:
   }
 
 private:
+  virtual cm::string_view StartCommandName() const = 0;
+  virtual cm::string_view EndCommandName() const = 0;
+
+  virtual bool ArgumentsMatch(cmListFileFunction const& lff,
+                              cmMakefile& mf) const = 0;
+
+  virtual bool Replay(std::vector<cmListFileFunction> functions,
+                      cmExecutionStatus& status) = 0;
+
+private:
   cmListFileContext StartingContext;
+  std::vector<cmListFileFunction> Functions;
+  unsigned int ScopeDepth = 1;
 };
 
 #endif

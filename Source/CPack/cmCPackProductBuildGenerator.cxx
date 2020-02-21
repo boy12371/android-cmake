@@ -2,13 +2,15 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCPackProductBuildGenerator.h"
 
+#include <cstddef>
 #include <map>
 #include <sstream>
-#include <stddef.h>
 
 #include "cmCPackComponentGroup.h"
 #include "cmCPackLog.h"
+#include "cmDuration.h"
 #include "cmGeneratedFileStream.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
 cmCPackProductBuildGenerator::cmCPackProductBuildGenerator()
@@ -16,9 +18,7 @@ cmCPackProductBuildGenerator::cmCPackProductBuildGenerator()
   this->componentPackageMethod = ONE_PACKAGE;
 }
 
-cmCPackProductBuildGenerator::~cmCPackProductBuildGenerator()
-{
-}
+cmCPackProductBuildGenerator::~cmCPackProductBuildGenerator() = default;
 
 int cmCPackProductBuildGenerator::PackageFiles()
 {
@@ -29,8 +29,8 @@ int cmCPackProductBuildGenerator::PackageFiles()
     this->GetOption("CPACK_TEMPORARY_DIRECTORY");
 
   // Create the directory where component packages will be built.
-  std::string basePackageDir = packageDirFileName;
-  basePackageDir += "/Contents/Packages";
+  std::string basePackageDir =
+    cmStrCat(packageDirFileName, "/Contents/Packages");
   if (!cmsys::SystemTools::MakeDirectory(basePackageDir.c_str())) {
     cmCPackLogger(cmCPackLog::LOG_ERROR,
                   "Problem creating component packages directory: "
@@ -42,9 +42,7 @@ int cmCPackProductBuildGenerator::PackageFiles()
     std::map<std::string, cmCPackComponent>::iterator compIt;
     for (compIt = this->Components.begin(); compIt != this->Components.end();
          ++compIt) {
-      std::string packageDir = toplevel;
-      packageDir += '/';
-      packageDir += compIt->first;
+      std::string packageDir = cmStrCat(toplevel, '/', compIt->first);
       if (!this->GenerateComponentPackage(basePackageDir,
                                           GetPackageName(compIt->second),
                                           packageDir, &compIt->second)) {
@@ -66,8 +64,8 @@ int cmCPackProductBuildGenerator::PackageFiles()
       this->GetOption("CPACK_PRODUCTBUILD_RESOURCES_DIR");
 
     if (!cmSystemTools::CopyADirectory(userResDir, resDir)) {
-      cmCPackLogger(cmCPackLog::LOG_ERROR, "Problem copying the resource files"
-                      << std::endl);
+      cmCPackLogger(cmCPackLog::LOG_ERROR,
+                    "Problem copying the resource files" << std::endl);
       return 0;
     }
   }
@@ -120,16 +118,16 @@ int cmCPackProductBuildGenerator::InitializeInternal()
   std::string program =
     cmSystemTools::FindProgram("pkgbuild", no_paths, false);
   if (program.empty()) {
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "Cannot find pkgbuild executable"
-                    << std::endl);
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "Cannot find pkgbuild executable" << std::endl);
     return 0;
   }
   this->SetOptionIfNotSet("CPACK_COMMAND_PKGBUILD", program.c_str());
 
   program = cmSystemTools::FindProgram("productbuild", no_paths, false);
   if (program.empty()) {
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "Cannot find productbuild executable"
-                    << std::endl);
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "Cannot find productbuild executable" << std::endl);
     return 0;
   }
   this->SetOptionIfNotSet("CPACK_COMMAND_PRODUCTBUILD", program.c_str());
@@ -139,18 +137,18 @@ int cmCPackProductBuildGenerator::InitializeInternal()
 
 bool cmCPackProductBuildGenerator::RunProductBuild(const std::string& command)
 {
-  std::string tmpFile = this->GetOption("CPACK_TOPLEVEL_DIRECTORY");
-  tmpFile += "/ProductBuildOutput.log";
+  std::string tmpFile = cmStrCat(this->GetOption("CPACK_TOPLEVEL_DIRECTORY"),
+                                 "/ProductBuildOutput.log");
 
   cmCPackLogger(cmCPackLog::LOG_VERBOSE, "Execute: " << command << std::endl);
-  std::string output, error_output;
+  std::string output;
   int retVal = 1;
-  bool res = cmSystemTools::RunSingleCommand(command.c_str(), &output,
-                                             &error_output, &retVal, nullptr,
-                                             this->GeneratorVerbose, 0);
+  bool res = cmSystemTools::RunSingleCommand(
+    command, &output, &output, &retVal, nullptr, this->GeneratorVerbose,
+    cmDuration::zero());
   cmCPackLogger(cmCPackLog::LOG_VERBOSE, "Done running command" << std::endl);
   if (!res || retVal) {
-    cmGeneratedFileStream ofs(tmpFile.c_str());
+    cmGeneratedFileStream ofs(tmpFile);
     ofs << "# Run command: " << command << std::endl
         << "# Output:" << std::endl
         << output << std::endl;
@@ -167,12 +165,11 @@ bool cmCPackProductBuildGenerator::GenerateComponentPackage(
   const std::string& packageFileDir, const std::string& packageFileName,
   const std::string& packageDir, const cmCPackComponent* component)
 {
-  std::string packageFile = packageFileDir;
-  packageFile += '/';
-  packageFile += packageFileName;
+  std::string packageFile = cmStrCat(packageFileDir, '/', packageFileName);
 
-  cmCPackLogger(cmCPackLog::LOG_OUTPUT, "-   Building component package: "
-                  << packageFile << std::endl);
+  cmCPackLogger(cmCPackLog::LOG_OUTPUT,
+                "-   Building component package: " << packageFile
+                                                   << std::endl);
 
   const char* comp_name = component ? component->Name.c_str() : nullptr;
 
@@ -206,10 +203,8 @@ bool cmCPackProductBuildGenerator::GenerateComponentPackage(
   // The command that will be used to run ProductBuild
   std::ostringstream pkgCmd;
 
-  std::string pkgId = "com.";
-  pkgId += this->GetOption("CPACK_PACKAGE_VENDOR");
-  pkgId += '.';
-  pkgId += this->GetOption("CPACK_PACKAGE_NAME");
+  std::string pkgId = cmStrCat("com.", this->GetOption("CPACK_PACKAGE_VENDOR"),
+                               '.', this->GetOption("CPACK_PACKAGE_NAME"));
   if (component) {
     pkgId += '.';
     pkgId += component->Name;

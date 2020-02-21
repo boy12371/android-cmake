@@ -2,23 +2,26 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCPackSTGZGenerator.h"
 
-#include "cmsys/FStream.hxx"
+#include <cstdio>
 #include <sstream>
-#include <stdio.h>
 #include <string>
+#include <vector>
 
+#include "cmsys/FStream.hxx"
+
+#include "cm_sys_stat.h"
+
+#include "cmArchiveWrite.h"
 #include "cmCPackGenerator.h"
 #include "cmCPackLog.h"
 #include "cmSystemTools.h"
-#include "cm_sys_stat.h"
 
 cmCPackSTGZGenerator::cmCPackSTGZGenerator()
+  : cmCPackArchiveGenerator(cmArchiveWrite::CompressGZip, "paxr", ".sh")
 {
 }
 
-cmCPackSTGZGenerator::~cmCPackSTGZGenerator()
-{
-}
+cmCPackSTGZGenerator::~cmCPackSTGZGenerator() = default;
 
 int cmCPackSTGZGenerator::InitializeInternal()
 {
@@ -56,7 +59,7 @@ int cmCPackSTGZGenerator::PackageFiles()
                                               S_IRGRP | S_IWGRP | S_IXGRP |
                                               S_IROTH | S_IWOTH | S_IXOTH
 #endif
-                                            );
+    );
   }
   return retval;
 }
@@ -100,8 +103,8 @@ int cmCPackSTGZGenerator::GenerateHeader(std::ostream* os)
     ++ptr;
   }
   counter++;
-  cmCPackLogger(cmCPackLog::LOG_DEBUG, "Number of lines: " << counter
-                                                           << std::endl);
+  cmCPackLogger(cmCPackLog::LOG_DEBUG,
+                "Number of lines: " << counter << std::endl);
   char buffer[1024];
   sprintf(buffer, "%d", counter);
   cmSystemTools::ReplaceString(res, headerLengthTag, buffer);

@@ -5,14 +5,19 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCustomCommandLines.h"
-#include "cmListFileCache.h"
-
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "cmCustomCommandLines.h"
+#include "cmListFileCache.h"
+
 class cmMakefile;
+
+class cmImplicitDependsList
+  : public std::vector<std::pair<std::string, std::string>>
+{
+};
 
 /** \class cmCustomCommand
  * \brief A class to encapsulate a custom command
@@ -22,16 +27,12 @@ class cmMakefile;
 class cmCustomCommand
 {
 public:
-  /** Default and copy constructors for STL containers.  */
-  cmCustomCommand();
-
   /** Main constructor specifies all information for the command.  */
-  cmCustomCommand(cmMakefile const* mf,
-                  const std::vector<std::string>& outputs,
-                  const std::vector<std::string>& byproducts,
-                  const std::vector<std::string>& depends,
-                  const cmCustomCommandLines& commandLines,
-                  const char* comment, const char* workingDirectory);
+  cmCustomCommand(cmMakefile const* mf, std::vector<std::string> outputs,
+                  std::vector<std::string> byproducts,
+                  std::vector<std::string> depends,
+                  cmCustomCommandLines commandLines, const char* comment,
+                  const char* workingDirectory);
 
   /** Get the output file produced by the command.  */
   const std::vector<std::string>& GetOutputs() const;
@@ -72,13 +73,9 @@ public:
   /** Backtrace of the command that created this custom command.  */
   cmListFileBacktrace const& GetBacktrace() const;
 
-  typedef std::pair<std::string, std::string> ImplicitDependsPair;
-  class ImplicitDependsList : public std::vector<ImplicitDependsPair>
-  {
-  };
-  void SetImplicitDepends(ImplicitDependsList const&);
-  void AppendImplicitDepends(ImplicitDependsList const&);
-  ImplicitDependsList const& GetImplicitDepends() const;
+  void SetImplicitDepends(cmImplicitDependsList const&);
+  void AppendImplicitDepends(cmImplicitDependsList const&);
+  cmImplicitDependsList const& GetImplicitDepends() const;
 
   /** Set/Get whether this custom command should be given access to the
       real console (if possible).  */
@@ -93,21 +90,26 @@ public:
   const std::string& GetDepfile() const;
   void SetDepfile(const std::string& depfile);
 
+  /** Set/Get the job_pool (used by the Ninja generator) */
+  const std::string& GetJobPool() const;
+  void SetJobPool(const std::string& job_pool);
+
 private:
   std::vector<std::string> Outputs;
   std::vector<std::string> Byproducts;
   std::vector<std::string> Depends;
   cmCustomCommandLines CommandLines;
   cmListFileBacktrace Backtrace;
-  ImplicitDependsList ImplicitDepends;
+  cmImplicitDependsList ImplicitDepends;
   std::string Comment;
   std::string WorkingDirectory;
   std::string Depfile;
-  bool HaveComment;
-  bool EscapeAllowMakeVars;
-  bool EscapeOldStyle;
-  bool UsesTerminal;
-  bool CommandExpandLists;
+  std::string JobPool;
+  bool HaveComment = false;
+  bool EscapeAllowMakeVars = false;
+  bool EscapeOldStyle = true;
+  bool UsesTerminal = false;
+  bool CommandExpandLists = false;
 };
 
 #endif

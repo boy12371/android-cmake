@@ -2,12 +2,9 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmNewLineStyle.h"
 
-#include <stddef.h>
+#include <cstddef>
 
-cmNewLineStyle::cmNewLineStyle()
-  : NewLineStyle(Invalid)
-{
-}
+cmNewLineStyle::cmNewLineStyle() = default;
 
 bool cmNewLineStyle::IsValid() const
 {
@@ -44,7 +41,7 @@ bool cmNewLineStyle::ReadFromArguments(const std::vector<std::string>& args,
   return true;
 }
 
-const std::string cmNewLineStyle::GetCharacters() const
+std::string cmNewLineStyle::GetCharacters() const
 {
   switch (NewLineStyle) {
     case Invalid:

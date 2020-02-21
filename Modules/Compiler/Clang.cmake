@@ -11,7 +11,8 @@ set(__COMPILER_CLANG 1)
 include(Compiler/CMakeCommonCompilerMacros)
 
 if("x${CMAKE_C_SIMULATE_ID}" STREQUAL "xMSVC"
-    OR "x${CMAKE_CXX_SIMULATE_ID}" STREQUAL "xMSVC")
+    OR "x${CMAKE_CXX_SIMULATE_ID}" STREQUAL "xMSVC"
+    OR "x${CMAKE_Fortran_SIMULATE_ID}" STREQUAL "xMSVC")
   macro(__compiler_clang lang)
   endmacro()
 else()
@@ -20,6 +21,12 @@ else()
   macro(__compiler_clang lang)
     __compiler_gnu(${lang})
     set(CMAKE_${lang}_COMPILE_OPTIONS_PIE "-fPIE")
+    # Link options for PIE are already set in 'Compiler/GNU.cmake'
+    # but clang may require alternate syntax on some platforms
+    if (APPLE)
+      set(CMAKE_${lang}_LINK_OPTIONS_PIE ${CMAKE_${lang}_COMPILE_OPTIONS_PIE} -Xlinker -pie)
+      set(CMAKE_${lang}_LINK_OPTIONS_NO_PIE -Xlinker -no_pie)
+    endif()
     set(CMAKE_INCLUDE_SYSTEM_FLAG_${lang} "-isystem ")
     set(CMAKE_${lang}_COMPILE_OPTIONS_VISIBILITY "-fvisibility=")
     if(CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 3.4.0)
@@ -28,6 +35,16 @@ else()
     else()
       set(CMAKE_${lang}_COMPILE_OPTIONS_TARGET "--target=")
       set(CMAKE_${lang}_COMPILE_OPTIONS_EXTERNAL_TOOLCHAIN "--gcc-toolchain=")
+    endif()
+    set(CMAKE_${lang}_LINKER_WRAPPER_FLAG "-Xlinker" " ")
+    set(CMAKE_${lang}_LINKER_WRAPPER_FLAG_SEP)
+
+    if(CMAKE_${lang}_COMPILER_TARGET)
+      if(CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 3.4.0)
+        list(APPEND CMAKE_${lang}_COMPILER_PREDEFINES_COMMAND "-target" "${CMAKE_${lang}_COMPILER_TARGET}")
+      else()
+        list(APPEND CMAKE_${lang}_COMPILER_PREDEFINES_COMMAND "--target=${CMAKE_${lang}_COMPILER_TARGET}")
+      endif()
     endif()
 
     set(_CMAKE_${lang}_IPO_SUPPORTED_BY_CMAKE YES)
@@ -79,5 +96,12 @@ else()
     set(CMAKE_${lang}_ARCHIVE_FINISH_IPO
       "\"${__ranlib}\" <TARGET>"
     )
+
+    set(CMAKE_PCH_EXTENSION .pch)
+    if (NOT CMAKE_GENERATOR MATCHES "Xcode")
+      set(CMAKE_PCH_PROLOGUE "#pragma clang system_header")
+    endif()
+    set(CMAKE_${lang}_COMPILE_OPTIONS_USE_PCH -Xclang -include-pch -Xclang <PCH_FILE>)
+    set(CMAKE_${lang}_COMPILE_OPTIONS_CREATE_PCH -Xclang -emit-pch -Xclang -include -Xclang <PCH_HEADER>)
   endmacro()
 endif()

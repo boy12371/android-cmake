@@ -76,8 +76,8 @@ _cmake()
                 compopt -o nospace
             else
             # complete variable names
-                COMPREPLY=( $( compgen -W '$( cmake -LA -N | tail -n +2 |
-                    cut -f1 -d: )' -P "$prefix" -- "$cur" ) )
+                COMPREPLY=( $( compgen -W '$( cmake -LA -N 2>/dev/null |
+                    tail -n +2 | cut -f1 -d: )' -P "$prefix" -- "$cur" ) )
                 compopt -o nospace
             fi
             return
@@ -96,7 +96,7 @@ _cmake()
             _filedir
             return
             ;;
-        --build)
+        --build|--install|--open)
             _filedir -d
             return
             ;;
@@ -115,6 +115,9 @@ _cmake()
                 -e "/^  *[^ =]/{s|^ *\([^=]*[^ =]\).*$|\1|;s| |\\\\ |g;p}" \
                 2>/dev/null )' -- "$quoted" ) )
             return
+            ;;
+        --loglevel)
+            COMPREPLY=( $(compgen -W 'error warning notice status verbose debug trace' -- $cur ) )
             ;;
         --help-command)
             COMPREPLY=( $( compgen -W '$( cmake --help-command-list 2>/dev/null|

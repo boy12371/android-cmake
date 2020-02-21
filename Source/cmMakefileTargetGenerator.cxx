@@ -2,9 +2,9 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmMakefileTargetGenerator.h"
 
-#include <memory> // IWYU pragma: keep
+#include <cstdio>
+#include <memory>
 #include <sstream>
-#include <stdio.h>
 #include <utility>
 
 #include "cmAlgorithms.h"
@@ -15,18 +15,21 @@
 #include "cmGeneratorExpression.h"
 #include "cmGeneratorTarget.h"
 #include "cmGlobalUnixMakefileGenerator3.h"
+#include "cmLocalCommonGenerator.h"
 #include "cmLocalUnixMakefileGenerator3.h"
 #include "cmMakefile.h"
 #include "cmMakefileExecutableTargetGenerator.h"
 #include "cmMakefileLibraryTargetGenerator.h"
 #include "cmMakefileUtilityTargetGenerator.h"
 #include "cmOutputConverter.h"
+#include "cmRange.h"
 #include "cmRulePlaceholderExpander.h"
 #include "cmSourceFile.h"
 #include "cmState.h"
 #include "cmStateDirectory.h"
 #include "cmStateSnapshot.h"
 #include "cmStateTypes.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmake.h"
 
@@ -47,7 +50,7 @@ cmMakefileTargetGenerator::cmMakefileTargetGenerator(cmGeneratorTarget* target)
   this->NoRuleMessages = false;
   if (const char* ruleStatus =
         cm->GetState()->GetGlobalProperty("RULE_MESSAGES")) {
-    this->NoRuleMessages = cmSystemTools::IsOff(ruleStatus);
+    this->NoRuleMessages = cmIsOff(ruleStatus);
   }
   MacOSXContentGenerator = new MacOSXContentGeneratorType(this);
 }
@@ -82,6 +85,26 @@ cmMakefileTargetGenerator* cmMakefileTargetGenerator::New(
   return result;
 }
 
+void cmMakefileTargetGenerator::GetTargetLinkFlags(
+  std::string& flags, const std::string& linkLanguage)
+{
+  this->LocalGenerator->AppendFlags(
+    flags, this->GeneratorTarget->GetSafeProperty("LINK_FLAGS"));
+
+  std::string linkFlagsConfig =
+    cmStrCat("LINK_FLAGS_", cmSystemTools::UpperCase(this->ConfigName));
+  this->LocalGenerator->AppendFlags(
+    flags, this->GeneratorTarget->GetSafeProperty(linkFlagsConfig));
+
+  std::vector<std::string> opts;
+  this->GeneratorTarget->GetLinkOptions(opts, this->ConfigName, linkLanguage);
+  // LINK_OPTIONS are escaped.
+  this->LocalGenerator->AppendCompileOptions(flags, opts);
+
+  this->LocalGenerator->AppendPositionIndependentLinkerFlags(
+    flags, this->GeneratorTarget, this->ConfigName, linkLanguage);
+}
+
 void cmMakefileTargetGenerator::CreateRuleFile()
 {
   // Create a directory for this target.
@@ -89,17 +112,16 @@ void cmMakefileTargetGenerator::CreateRuleFile()
     this->LocalGenerator->GetTargetDirectory(this->GeneratorTarget);
   this->TargetBuildDirectoryFull =
     this->LocalGenerator->ConvertToFullPath(this->TargetBuildDirectory);
-  cmSystemTools::MakeDirectory(this->TargetBuildDirectoryFull.c_str());
+  cmSystemTools::MakeDirectory(this->TargetBuildDirectoryFull);
 
   // Construct the rule file name.
-  this->BuildFileName = this->TargetBuildDirectory;
-  this->BuildFileName += "/build.make";
-  this->BuildFileNameFull = this->TargetBuildDirectoryFull;
-  this->BuildFileNameFull += "/build.make";
+  this->BuildFileName = cmStrCat(this->TargetBuildDirectory, "/build.make");
+  this->BuildFileNameFull =
+    cmStrCat(this->TargetBuildDirectoryFull, "/build.make");
 
   // Construct the rule file name.
-  this->ProgressFileNameFull = this->TargetBuildDirectoryFull;
-  this->ProgressFileNameFull += "/progress.make";
+  this->ProgressFileNameFull =
+    cmStrCat(this->TargetBuildDirectoryFull, "/progress.make");
 
   // reset the progress count
   this->NumberOfProgressActions = 0;
@@ -107,12 +129,12 @@ void cmMakefileTargetGenerator::CreateRuleFile()
   // Open the rule file.  This should be copy-if-different because the
   // rules may depend on this file itself.
   this->BuildFileStream =
-    new cmGeneratedFileStream(this->BuildFileNameFull.c_str(), false,
+    new cmGeneratedFileStream(this->BuildFileNameFull, false,
                               this->GlobalGenerator->GetMakefileEncoding());
-  this->BuildFileStream->SetCopyIfDifferent(true);
   if (!this->BuildFileStream) {
     return;
   }
+  this->BuildFileStream->SetCopyIfDifferent(true);
   this->LocalGenerator->WriteDisclaimer(*this->BuildFileStream);
   if (this->GlobalGenerator->AllowDeleteOnError()) {
     std::vector<std::string> no_depends;
@@ -126,31 +148,46 @@ void cmMakefileTargetGenerator::CreateRuleFile()
 
 void cmMakefileTargetGenerator::WriteTargetBuildRules()
 {
-  const std::string& config =
-    this->Makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
+  // -- Write the custom commands for this target
 
-  // write the custom commands for this target
-  // Look for files registered for cleaning in this directory.
-  if (const char* additional_clean_files =
+  // Evaluates generator expressions and expands prop_value
+  auto evaluatedFiles =
+    [this](const char* prop_value) -> std::vector<std::string> {
+    std::vector<std::string> files;
+    cmExpandList(
+      cmGeneratorExpression::Evaluate(prop_value, this->LocalGenerator,
+                                      this->ConfigName, this->GeneratorTarget),
+      files);
+    return files;
+  };
+
+  // Look for additional files registered for cleaning in this directory.
+  if (const char* prop_value =
         this->Makefile->GetProperty("ADDITIONAL_MAKE_CLEAN_FILES")) {
-    cmGeneratorExpression ge;
-    std::unique_ptr<cmCompiledGeneratorExpression> cge =
-      ge.Parse(additional_clean_files);
+    std::vector<std::string> const files = evaluatedFiles(prop_value);
+    this->CleanFiles.insert(files.begin(), files.end());
+  }
 
-    cmSystemTools::ExpandListArgument(
-      cge->Evaluate(this->LocalGenerator, config, false, this->GeneratorTarget,
-                    nullptr, nullptr),
-      this->CleanFiles);
+  // Look for additional files registered for cleaning in this target.
+  if (const char* prop_value =
+        this->GeneratorTarget->GetProperty("ADDITIONAL_CLEAN_FILES")) {
+    std::vector<std::string> const files = evaluatedFiles(prop_value);
+    // For relative path support
+    std::string const& binaryDir =
+      this->LocalGenerator->GetCurrentBinaryDirectory();
+    for (std::string const& cfl : files) {
+      this->CleanFiles.insert(cmSystemTools::CollapseFullPath(cfl, binaryDir));
+    }
   }
 
   // add custom commands to the clean rules?
   const char* clean_no_custom = this->Makefile->GetProperty("CLEAN_NO_CUSTOM");
-  bool clean = cmSystemTools::IsOff(clean_no_custom);
+  bool clean = cmIsOff(clean_no_custom);
 
   // First generate the object rule files.  Save a list of all object
   // files for this target.
   std::vector<cmSourceFile const*> customCommands;
-  this->GeneratorTarget->GetCustomCommands(customCommands, config);
+  this->GeneratorTarget->GetCustomCommands(customCommands, this->ConfigName);
   std::string currentBinDir =
     this->LocalGenerator->GetCurrentBinaryDirectory();
   for (cmSourceFile const* sf : customCommands) {
@@ -160,27 +197,58 @@ void cmMakefileTargetGenerator::WriteTargetBuildRules()
     if (clean) {
       const std::vector<std::string>& outputs = ccg.GetOutputs();
       for (std::string const& output : outputs) {
-        this->CleanFiles.push_back(
+        this->CleanFiles.insert(
           this->LocalGenerator->MaybeConvertToRelativePath(currentBinDir,
                                                            output));
+      }
+      const std::vector<std::string>& byproducts = ccg.GetByproducts();
+      for (std::string const& byproduct : byproducts) {
+        this->CleanFiles.insert(
+          this->LocalGenerator->MaybeConvertToRelativePath(currentBinDir,
+                                                           byproduct));
+      }
+    }
+  }
+
+  // Add byproducts from build events to the clean rules
+  if (clean) {
+    std::vector<cmCustomCommand> buildEventCommands =
+      this->GeneratorTarget->GetPreBuildCommands();
+
+    cmAppend(buildEventCommands, this->GeneratorTarget->GetPreLinkCommands());
+    cmAppend(buildEventCommands,
+             this->GeneratorTarget->GetPostBuildCommands());
+
+    for (const auto& be : buildEventCommands) {
+      cmCustomCommandGenerator beg(be, this->ConfigName, this->LocalGenerator);
+      const std::vector<std::string>& byproducts = beg.GetByproducts();
+      for (std::string const& byproduct : byproducts) {
+        this->CleanFiles.insert(
+          this->LocalGenerator->MaybeConvertToRelativePath(currentBinDir,
+                                                           byproduct));
       }
     }
   }
   std::vector<cmSourceFile const*> headerSources;
-  this->GeneratorTarget->GetHeaderSources(headerSources, config);
+  this->GeneratorTarget->GetHeaderSources(headerSources, this->ConfigName);
   this->OSXBundleGenerator->GenerateMacOSXContentStatements(
     headerSources, this->MacOSXContentGenerator);
   std::vector<cmSourceFile const*> extraSources;
-  this->GeneratorTarget->GetExtraSources(extraSources, config);
+  this->GeneratorTarget->GetExtraSources(extraSources, this->ConfigName);
   this->OSXBundleGenerator->GenerateMacOSXContentStatements(
     extraSources, this->MacOSXContentGenerator);
+  const char* pchExtension =
+    this->Makefile->GetDefinition("CMAKE_PCH_EXTENSION");
   std::vector<cmSourceFile const*> externalObjects;
-  this->GeneratorTarget->GetExternalObjects(externalObjects, config);
+  this->GeneratorTarget->GetExternalObjects(externalObjects, this->ConfigName);
   for (cmSourceFile const* sf : externalObjects) {
-    this->ExternalObjects.push_back(sf->GetFullPath());
+    auto const& objectFileName = sf->GetFullPath();
+    if (!cmSystemTools::StringEndsWith(objectFileName, pchExtension)) {
+      this->ExternalObjects.push_back(objectFileName);
+    }
   }
   std::vector<cmSourceFile const*> objectSources;
-  this->GeneratorTarget->GetObjectSources(objectSources, config);
+  this->GeneratorTarget->GetObjectSources(objectSources, this->ConfigName);
   for (cmSourceFile const* sf : objectSources) {
     // Generate this object file's rule file.
     this->WriteObjectRuleFiles(*sf);
@@ -194,16 +262,14 @@ void cmMakefileTargetGenerator::WriteCommonCodeRules()
                         : "");
 
   // Include the dependencies for the target.
-  std::string dependFileNameFull = this->TargetBuildDirectoryFull;
-  dependFileNameFull += "/depend.make";
+  std::string dependFileNameFull =
+    cmStrCat(this->TargetBuildDirectoryFull, "/depend.make");
   *this->BuildFileStream
     << "# Include any dependencies generated for this target.\n"
     << this->GlobalGenerator->IncludeDirective << " " << root
     << cmSystemTools::ConvertToOutputPath(
-         this->LocalGenerator
-           ->MaybeConvertToRelativePath(
-             this->LocalGenerator->GetBinaryDirectory(), dependFileNameFull)
-           .c_str())
+         this->LocalGenerator->MaybeConvertToRelativePath(
+           this->LocalGenerator->GetBinaryDirectory(), dependFileNameFull))
     << "\n\n";
 
   if (!this->NoRuleMessages) {
@@ -212,20 +278,17 @@ void cmMakefileTargetGenerator::WriteCommonCodeRules()
       << "# Include the progress variables for this target.\n"
       << this->GlobalGenerator->IncludeDirective << " " << root
       << cmSystemTools::ConvertToOutputPath(
-           this->LocalGenerator
-             ->MaybeConvertToRelativePath(
-               this->LocalGenerator->GetBinaryDirectory(),
-               this->ProgressFileNameFull)
-             .c_str())
+           this->LocalGenerator->MaybeConvertToRelativePath(
+             this->LocalGenerator->GetBinaryDirectory(),
+             this->ProgressFileNameFull))
       << "\n\n";
   }
 
   // make sure the depend file exists
-  if (!cmSystemTools::FileExists(dependFileNameFull.c_str())) {
+  if (!cmSystemTools::FileExists(dependFileNameFull)) {
     // Write an empty dependency file.
     cmGeneratedFileStream depFileStream(
-      dependFileNameFull.c_str(), false,
-      this->GlobalGenerator->GetMakefileEncoding());
+      dependFileNameFull, false, this->GlobalGenerator->GetMakefileEncoding());
     depFileStream << "# Empty dependencies file for "
                   << this->GeneratorTarget->GetName() << ".\n"
                   << "# This may be replaced when dependencies are built."
@@ -234,15 +297,15 @@ void cmMakefileTargetGenerator::WriteCommonCodeRules()
 
   // Open the flags file.  This should be copy-if-different because the
   // rules may depend on this file itself.
-  this->FlagFileNameFull = this->TargetBuildDirectoryFull;
-  this->FlagFileNameFull += "/flags.make";
+  this->FlagFileNameFull =
+    cmStrCat(this->TargetBuildDirectoryFull, "/flags.make");
   this->FlagFileStream =
-    new cmGeneratedFileStream(this->FlagFileNameFull.c_str(), false,
+    new cmGeneratedFileStream(this->FlagFileNameFull, false,
                               this->GlobalGenerator->GetMakefileEncoding());
-  this->FlagFileStream->SetCopyIfDifferent(true);
   if (!this->FlagFileStream) {
     return;
   }
+  this->FlagFileStream->SetCopyIfDifferent(true);
   this->LocalGenerator->WriteDisclaimer(*this->FlagFileStream);
 
   // Include the flags for the target.
@@ -250,11 +313,8 @@ void cmMakefileTargetGenerator::WriteCommonCodeRules()
     << "# Include the compile flags for this target's objects.\n"
     << this->GlobalGenerator->IncludeDirective << " " << root
     << cmSystemTools::ConvertToOutputPath(
-         this->LocalGenerator
-           ->MaybeConvertToRelativePath(
-             this->LocalGenerator->GetBinaryDirectory(),
-             this->FlagFileNameFull)
-           .c_str())
+         this->LocalGenerator->MaybeConvertToRelativePath(
+           this->LocalGenerator->GetBinaryDirectory(), this->FlagFileNameFull))
     << "\n\n";
 }
 
@@ -267,9 +327,7 @@ void cmMakefileTargetGenerator::WriteTargetLanguageFlags()
   // put the compiler in the rules.make file so that if it changes
   // things rebuild
   for (std::string const& language : languages) {
-    std::string compiler = "CMAKE_";
-    compiler += language;
-    compiler += "_COMPILER";
+    std::string compiler = cmStrCat("CMAKE_", language, "_COMPILER");
     *this->FlagFileStream << "# compile " << language << " with "
                           << this->Makefile->GetSafeDefinition(compiler)
                           << "\n";
@@ -304,10 +362,9 @@ void cmMakefileTargetGenerator::MacOSXContentGeneratorType::operator()(
   std::string const& input = source.GetFullPath();
 
   // Get the output file location.
-  std::string output = macdir;
-  output += "/";
-  output += cmSystemTools::GetFilenameName(input);
-  this->Generator->CleanFiles.push_back(
+  std::string output =
+    cmStrCat(macdir, '/', cmSystemTools::GetFilenameName(input));
+  this->Generator->CleanFiles.insert(
     this->Generator->LocalGenerator->MaybeConvertToRelativePath(
       this->Generator->LocalGenerator->GetCurrentBinaryDirectory(), output));
   output = this->Generator->LocalGenerator->MaybeConvertToRelativePath(
@@ -317,17 +374,17 @@ void cmMakefileTargetGenerator::MacOSXContentGeneratorType::operator()(
   std::vector<std::string> depends;
   std::vector<std::string> commands;
   depends.push_back(input);
-  std::string copyEcho = "Copying OS X content ";
-  copyEcho += output;
+  std::string copyEcho = cmStrCat("Copying OS X content ", output);
   this->Generator->LocalGenerator->AppendEcho(
     commands, copyEcho, cmLocalUnixMakefileGenerator3::EchoBuild);
-  std::string copyCommand = "$(CMAKE_COMMAND) -E copy ";
-  copyCommand += this->Generator->LocalGenerator->ConvertToOutputFormat(
-    input, cmOutputConverter::SHELL);
-  copyCommand += " ";
-  copyCommand += this->Generator->LocalGenerator->ConvertToOutputFormat(
-    output, cmOutputConverter::SHELL);
-  commands.push_back(copyCommand);
+  std::string copyCommand =
+    cmStrCat("$(CMAKE_COMMAND) -E copy ",
+             this->Generator->LocalGenerator->ConvertToOutputFormat(
+               input, cmOutputConverter::SHELL),
+             ' ',
+             this->Generator->LocalGenerator->ConvertToOutputFormat(
+               output, cmOutputConverter::SHELL));
+  commands.push_back(std::move(copyCommand));
   this->Generator->LocalGenerator->WriteMakeRule(
     *this->Generator->BuildFileStream, nullptr, output, depends, commands,
     false);
@@ -349,9 +406,8 @@ void cmMakefileTargetGenerator::WriteObjectRuleFiles(
   std::string const& objectName =
     this->GeneratorTarget->GetObjectName(&source);
   std::string obj =
-    this->LocalGenerator->GetTargetDirectory(this->GeneratorTarget);
-  obj += "/";
-  obj += objectName;
+    cmStrCat(this->LocalGenerator->GetTargetDirectory(this->GeneratorTarget),
+             '/', objectName);
 
   // Avoid generating duplicate rules.
   if (this->ObjectFiles.find(obj) == this->ObjectFiles.end()) {
@@ -361,47 +417,32 @@ void cmMakefileTargetGenerator::WriteObjectRuleFiles(
     err << "Warning: Source file \"" << source.GetFullPath()
         << "\" is listed multiple times for target \""
         << this->GeneratorTarget->GetName() << "\".";
-    cmSystemTools::Message(err.str().c_str(), "Warning");
+    cmSystemTools::Message(err.str(), "Warning");
     return;
   }
 
   // Create the directory containing the object file.  This may be a
   // subdirectory under the target's directory.
-  std::string dir = cmSystemTools::GetFilenamePath(obj);
-  cmSystemTools::MakeDirectory(
-    this->LocalGenerator->ConvertToFullPath(dir).c_str());
+  {
+    std::string dir = cmSystemTools::GetFilenamePath(obj);
+    cmSystemTools::MakeDirectory(this->LocalGenerator->ConvertToFullPath(dir));
+  }
 
   // Save this in the target's list of object files.
   this->Objects.push_back(obj);
-  this->CleanFiles.push_back(obj);
+  this->CleanFiles.insert(obj);
 
-  // TODO: Remove
-  // std::string relativeObj
-  //= this->LocalGenerator->GetHomeRelativeOutputPath();
-  // relativeObj += obj;
-
-  // we compute some depends when writing the depend.make that we will also
-  // use in the build.make, same with depMakeFile
   std::vector<std::string> depends;
 
-  // generate the build rule file
-  this->WriteObjectBuildFile(obj, lang, source, depends);
-
   // The object file should be checked for dependency integrity.
-  std::string objFullPath = this->LocalGenerator->GetCurrentBinaryDirectory();
-  objFullPath += "/";
-  objFullPath += obj;
+  std::string objFullPath =
+    cmStrCat(this->LocalGenerator->GetCurrentBinaryDirectory(), '/', obj);
   objFullPath = cmSystemTools::CollapseFullPath(objFullPath);
   std::string srcFullPath =
     cmSystemTools::CollapseFullPath(source.GetFullPath());
-  this->LocalGenerator->AddImplicitDepends(
-    this->GeneratorTarget, lang, objFullPath.c_str(), srcFullPath.c_str());
-}
+  this->LocalGenerator->AddImplicitDepends(this->GeneratorTarget, lang,
+                                           objFullPath, srcFullPath);
 
-void cmMakefileTargetGenerator::WriteObjectBuildFile(
-  std::string& obj, const std::string& lang, cmSourceFile const& source,
-  std::vector<std::string>& depends)
-{
   this->LocalGenerator->AppendRuleDepend(depends,
                                          this->FlagFileNameFull.c_str());
   this->LocalGenerator->AppendRuleDepends(depends,
@@ -410,21 +451,36 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
   // generate the depend scanning rule
   this->WriteObjectDependRules(source, depends);
 
-  std::string relativeObj = this->LocalGenerator->GetHomeRelativeOutputPath();
-  relativeObj += obj;
+  std::string config = this->LocalGenerator->GetConfigName();
+  std::string configUpper = cmSystemTools::UpperCase(config);
+
+  // Add precompile headers dependencies
+  const std::string pchSource =
+    this->GeneratorTarget->GetPchSource(config, lang);
+  if (!pchSource.empty() && !source.GetProperty("SKIP_PRECOMPILE_HEADERS")) {
+    std::string const& pchHeader =
+      this->GeneratorTarget->GetPchHeader(config, lang);
+    depends.push_back(pchHeader);
+    if (source.GetFullPath() != pchSource) {
+      depends.push_back(this->GeneratorTarget->GetPchFile(config, lang));
+    }
+    this->LocalGenerator->AddImplicitDepends(this->GeneratorTarget, lang,
+                                             objFullPath, pchHeader);
+  }
+
+  std::string relativeObj =
+    cmStrCat(this->LocalGenerator->GetHomeRelativeOutputPath(), obj);
   // Write the build rule.
 
   // Build the set of compiler flags.
   std::string flags;
 
   // Add language-specific flags.
-  std::string langFlags = "$(";
-  langFlags += lang;
-  langFlags += "_FLAGS)";
+  std::string langFlags = cmStrCat("$(", lang, "_FLAGS)");
   this->LocalGenerator->AppendFlags(flags, langFlags);
 
-  std::string config = this->LocalGenerator->GetConfigName();
-  std::string configUpper = cmSystemTools::UpperCase(config);
+  cmGeneratorExpressionInterpreter genexInterpreter(
+    this->LocalGenerator, config, this->GeneratorTarget, lang);
 
   // Add Fortran format flags.
   if (lang == "Fortran") {
@@ -432,34 +488,81 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
   }
 
   // Add flags from source file properties.
-  if (const char* cflags = source.GetProperty("COMPILE_FLAGS")) {
-    cmGeneratorExpression ge;
-    std::unique_ptr<cmCompiledGeneratorExpression> cge = ge.Parse(cflags);
-    const char* evaluatedFlags = cge->Evaluate(this->LocalGenerator, config,
-                                               false, this->GeneratorTarget);
+  const std::string COMPILE_FLAGS("COMPILE_FLAGS");
+  if (const char* cflags = source.GetProperty(COMPILE_FLAGS)) {
+    const std::string& evaluatedFlags =
+      genexInterpreter.Evaluate(cflags, COMPILE_FLAGS);
     this->LocalGenerator->AppendFlags(flags, evaluatedFlags);
     *this->FlagFileStream << "# Custom flags: " << relativeObj
                           << "_FLAGS = " << evaluatedFlags << "\n"
                           << "\n";
   }
 
+  const std::string COMPILE_OPTIONS("COMPILE_OPTIONS");
+  if (const char* coptions = source.GetProperty(COMPILE_OPTIONS)) {
+    const std::string& evaluatedOptions =
+      genexInterpreter.Evaluate(coptions, COMPILE_OPTIONS);
+    this->LocalGenerator->AppendCompileOptions(flags, evaluatedOptions);
+    *this->FlagFileStream << "# Custom options: " << relativeObj
+                          << "_OPTIONS = " << evaluatedOptions << "\n"
+                          << "\n";
+  }
+
+  // Add precompile headers compile options.
+  if (!pchSource.empty() && !source.GetProperty("SKIP_PRECOMPILE_HEADERS")) {
+    std::string pchOptions;
+    if (source.GetFullPath() == pchSource) {
+      pchOptions =
+        this->GeneratorTarget->GetPchCreateCompileOptions(config, lang);
+    } else {
+      pchOptions =
+        this->GeneratorTarget->GetPchUseCompileOptions(config, lang);
+    }
+
+    const std::string& evaluatedFlags =
+      genexInterpreter.Evaluate(pchOptions, COMPILE_OPTIONS);
+
+    this->LocalGenerator->AppendCompileOptions(flags, evaluatedFlags);
+    *this->FlagFileStream << "# PCH options: " << relativeObj
+                          << "_OPTIONS = " << evaluatedFlags << "\n"
+                          << "\n";
+  }
+
+  // Add include directories from source file properties.
+  std::vector<std::string> includes;
+
+  const std::string INCLUDE_DIRECTORIES("INCLUDE_DIRECTORIES");
+  if (const char* cincludes = source.GetProperty(INCLUDE_DIRECTORIES)) {
+    const std::string& evaluatedIncludes =
+      genexInterpreter.Evaluate(cincludes, INCLUDE_DIRECTORIES);
+    this->LocalGenerator->AppendIncludeDirectories(includes, evaluatedIncludes,
+                                                   source);
+    *this->FlagFileStream << "# Custom include directories: " << relativeObj
+                          << "_INCLUDE_DIRECTORIES = " << evaluatedIncludes
+                          << "\n"
+                          << "\n";
+  }
+
   // Add language-specific defines.
   std::set<std::string> defines;
 
-  // Add source-sepcific preprocessor definitions.
-  if (const char* compile_defs = source.GetProperty("COMPILE_DEFINITIONS")) {
-    this->LocalGenerator->AppendDefines(defines, compile_defs);
+  // Add source-specific preprocessor definitions.
+  const std::string COMPILE_DEFINITIONS("COMPILE_DEFINITIONS");
+  if (const char* compile_defs = source.GetProperty(COMPILE_DEFINITIONS)) {
+    const std::string& evaluatedDefs =
+      genexInterpreter.Evaluate(compile_defs, COMPILE_DEFINITIONS);
+    this->LocalGenerator->AppendDefines(defines, evaluatedDefs);
     *this->FlagFileStream << "# Custom defines: " << relativeObj
-                          << "_DEFINES = " << compile_defs << "\n"
+                          << "_DEFINES = " << evaluatedDefs << "\n"
                           << "\n";
   }
-  std::string defPropName = "COMPILE_DEFINITIONS_";
-  defPropName += configUpper;
+  std::string defPropName = cmStrCat("COMPILE_DEFINITIONS_", configUpper);
   if (const char* config_compile_defs = source.GetProperty(defPropName)) {
-    this->LocalGenerator->AppendDefines(defines, config_compile_defs);
+    const std::string& evaluatedDefs =
+      genexInterpreter.Evaluate(config_compile_defs, COMPILE_DEFINITIONS);
+    this->LocalGenerator->AppendDefines(defines, evaluatedDefs);
     *this->FlagFileStream << "# Custom defines: " << relativeObj << "_DEFINES_"
-                          << configUpper << " = " << config_compile_defs
-                          << "\n"
+                          << configUpper << " = " << evaluatedDefs << "\n"
                           << "\n";
   }
 
@@ -477,10 +580,8 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
   if (!this->NoRuleMessages) {
     cmLocalUnixMakefileGenerator3::EchoProgress progress;
     this->MakeEchoProgress(progress);
-    std::string buildEcho = "Building ";
-    buildEcho += lang;
-    buildEcho += " object ";
-    buildEcho += relativeObj;
+    std::string buildEcho =
+      cmStrCat("Building ", lang, " object ", relativeObj);
     this->LocalGenerator->AppendEcho(commands, buildEcho,
                                      cmLocalUnixMakefileGenerator3::EchoBuild,
                                      &progress);
@@ -500,9 +601,8 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       targetFullPathReal = this->GeneratorTarget->GetFullPath(
         this->ConfigName, cmStateEnums::RuntimeBinaryArtifact, true);
       targetFullPathPDB =
-        this->GeneratorTarget->GetPDBDirectory(this->ConfigName);
-      targetFullPathPDB += "/";
-      targetFullPathPDB += this->GeneratorTarget->GetPDBName(this->ConfigName);
+        cmStrCat(this->GeneratorTarget->GetPDBDirectory(this->ConfigName), '/',
+                 this->GeneratorTarget->GetPDBName(this->ConfigName));
     }
 
     targetOutPathReal = this->LocalGenerator->ConvertToOutputFormat(
@@ -522,7 +622,7 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       // mingw32-make incorrectly interprets 'a\ b c' as 'a b' and 'c'
       // (but 'a\ b "c"' as 'a\', 'b', and 'c'!).  Workaround this by
       // avoiding a trailing backslash in the argument.
-      targetOutPathCompilePDB[targetOutPathCompilePDB.size() - 1] = '/';
+      targetOutPathCompilePDB.back() = '/';
     }
   }
   cmRulePlaceholderExpander::RuleVariables vars;
@@ -551,15 +651,16 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
   vars.ObjectFileDir = objectFileDir.c_str();
   vars.Flags = flags.c_str();
 
-  std::string definesString = "$(";
-  definesString += lang;
-  definesString += "_DEFINES)";
+  std::string definesString = cmStrCat("$(", lang, "_DEFINES)");
 
   this->LocalGenerator->JoinDefines(defines, definesString, lang);
 
   vars.Defines = definesString.c_str();
 
-  std::string const includesString = "$(" + lang + "_INCLUDES)";
+  std::string includesString = this->LocalGenerator->GetIncludeFlags(
+    includes, this->GeneratorTarget, lang, true, false, config);
+  this->LocalGenerator->AppendFlags(includesString,
+                                    "$(" + lang + "_INCLUDES)");
   vars.Includes = includesString.c_str();
 
   // At the moment, it is assumed that C, C++, Fortran, and CUDA have both
@@ -580,20 +681,21 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       std::string cmdVar;
       if (this->GeneratorTarget->GetPropertyAsBool(
             "CUDA_SEPARABLE_COMPILATION")) {
-        cmdVar = std::string("CMAKE_CUDA_COMPILE_SEPARABLE_COMPILATION");
+        cmdVar = "CMAKE_CUDA_COMPILE_SEPARABLE_COMPILATION";
       } else if (this->GeneratorTarget->GetPropertyAsBool(
                    "CUDA_PTX_COMPILATION")) {
-        cmdVar = std::string("CMAKE_CUDA_COMPILE_PTX_COMPILATION");
+        cmdVar = "CMAKE_CUDA_COMPILE_PTX_COMPILATION";
       } else {
-        cmdVar = std::string("CMAKE_CUDA_COMPILE_WHOLE_COMPILATION");
+        cmdVar = "CMAKE_CUDA_COMPILE_WHOLE_COMPILATION";
       }
-      std::string compileRule = this->Makefile->GetRequiredDefinition(cmdVar);
-      cmSystemTools::ExpandListArgument(compileRule, compileCommands);
+      const std::string& compileRule =
+        this->Makefile->GetRequiredDefinition(cmdVar);
+      cmExpandList(compileRule, compileCommands);
     } else {
-      const std::string cmdVar =
-        std::string("CMAKE_") + lang + "_COMPILE_OBJECT";
-      std::string compileRule = this->Makefile->GetRequiredDefinition(cmdVar);
-      cmSystemTools::ExpandListArgument(compileRule, compileCommands);
+      const std::string cmdVar = "CMAKE_" + lang + "_COMPILE_OBJECT";
+      const std::string& compileRule =
+        this->Makefile->GetRequiredDefinition(cmdVar);
+      cmExpandList(compileRule, compileCommands);
     }
 
     if (this->Makefile->IsOn("CMAKE_EXPORT_COMPILE_COMMANDS") &&
@@ -613,8 +715,32 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       std::string langIncludes = std::string("$(") + lang + "_INCLUDES)";
       compileCommand.replace(compileCommand.find(langIncludes),
                              langIncludes.size(), this->GetIncludes(lang));
+
+      const char* eliminate[] = {
+        this->Makefile->GetDefinition("CMAKE_START_TEMP_FILE"),
+        this->Makefile->GetDefinition("CMAKE_END_TEMP_FILE")
+      };
+      for (const char* el : eliminate) {
+        if (el) {
+          cmSystemTools::ReplaceString(compileCommand, el, "");
+        }
+      }
+
       this->GlobalGenerator->AddCXXCompileCommand(
         source.GetFullPath(), workingDirectory, compileCommand);
+    }
+
+    // See if we need to use a compiler launcher like ccache or distcc
+    std::string compilerLauncher;
+    if (!compileCommands.empty() &&
+        (lang == "C" || lang == "CXX" || lang == "Fortran" || lang == "CUDA" ||
+         lang == "OBJC" || lang == "OBJCXX")) {
+      std::string const clauncher_prop = lang + "_COMPILER_LAUNCHER";
+      const char* clauncher =
+        this->GeneratorTarget->GetProperty(clauncher_prop);
+      if (clauncher && *clauncher) {
+        compilerLauncher = clauncher;
+      }
     }
 
     // Maybe insert an include-what-you-use runner.
@@ -630,6 +756,13 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       if ((iwyu && *iwyu) || (tidy && *tidy) || (cpplint && *cpplint) ||
           (cppcheck && *cppcheck)) {
         std::string run_iwyu = "$(CMAKE_COMMAND) -E __run_co_compile";
+        if (!compilerLauncher.empty()) {
+          // In __run_co_compile case the launcher command is supplied
+          // via --launcher=<maybe-list> and consumed
+          run_iwyu += " --launcher=";
+          run_iwyu += this->LocalGenerator->EscapeForShell(compilerLauncher);
+          compilerLauncher.clear();
+        }
         if (iwyu && *iwyu) {
           run_iwyu += " --iwyu=";
           run_iwyu += this->LocalGenerator->EscapeForShell(iwyu);
@@ -656,21 +789,18 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       }
     }
 
-    // Maybe insert a compiler launcher like ccache or distcc
-    if (!compileCommands.empty() &&
-        (lang == "C" || lang == "CXX" || lang == "CUDA")) {
-      std::string const clauncher_prop = lang + "_COMPILER_LAUNCHER";
-      const char* clauncher =
-        this->GeneratorTarget->GetProperty(clauncher_prop);
-      if (clauncher && *clauncher) {
-        std::vector<std::string> launcher_cmd;
-        cmSystemTools::ExpandListArgument(clauncher, launcher_cmd, true);
-        for (std::string& i : launcher_cmd) {
+    // If compiler launcher was specified and not consumed above, it
+    // goes to the beginning of the command line.
+    if (!compileCommands.empty() && !compilerLauncher.empty()) {
+      std::vector<std::string> args = cmExpandedList(compilerLauncher, true);
+      if (!args.empty()) {
+        args[0] = this->LocalGenerator->ConvertToOutputFormat(
+          args[0], cmOutputConverter::SHELL);
+        for (std::string& i : cmMakeRange(args.begin() + 1, args.end())) {
           i = this->LocalGenerator->EscapeForShell(i);
         }
-        std::string const& run_launcher = cmJoin(launcher_cmd, " ") + " ";
-        compileCommands.front().insert(0, run_launcher);
       }
+      compileCommands.front().insert(0, cmJoin(args, " ") + " ");
     }
 
     std::string launcher;
@@ -678,14 +808,13 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       const char* val = this->LocalGenerator->GetRuleLauncher(
         this->GeneratorTarget, "RULE_LAUNCH_COMPILE");
       if (val && *val) {
-        launcher = val;
-        launcher += " ";
+        launcher = cmStrCat(val, ' ');
       }
     }
 
     // Expand placeholders in the commands.
     for (std::string& compileCommand : compileCommands) {
-      compileCommand = launcher + compileCommand;
+      compileCommand = cmStrCat(launcher, compileCommand);
       rulePlaceholderExpander->ExpandRuleVariables(this->LocalGenerator,
                                                    compileCommand, vars);
     }
@@ -694,17 +823,15 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
     this->LocalGenerator->CreateCDCommand(
       compileCommands, this->LocalGenerator->GetCurrentBinaryDirectory(),
       this->LocalGenerator->GetBinaryDirectory());
-    commands.insert(commands.end(), compileCommands.begin(),
-                    compileCommands.end());
+    cmAppend(commands, compileCommands);
   }
 
   // Check for extra outputs created by the compilation.
   std::vector<std::string> outputs(1, relativeObj);
   if (const char* extra_outputs_str = source.GetProperty("OBJECT_OUTPUTS")) {
     // Register these as extra files to clean.
-    cmSystemTools::ExpandListArgument(extra_outputs_str, outputs);
-    this->CleanFiles.insert(this->CleanFiles.end(), outputs.begin() + 1,
-                            outputs.end());
+    cmExpandList(extra_outputs_str, outputs);
+    this->CleanFiles.insert(outputs.begin() + 1, outputs.end());
   }
 
   // Write the rule.
@@ -717,7 +844,7 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
     lang_has_assembly && this->LocalGenerator->GetCreateAssemblySourceRules();
   if (do_preprocess_rules || do_assembly_rules) {
     std::vector<std::string> force_depends;
-    force_depends.push_back("cmake_force");
+    force_depends.emplace_back("cmake_force");
     std::string::size_type dot_pos = relativeObj.rfind('.');
     std::string relativeObjBase = relativeObj.substr(0, dot_pos);
     dot_pos = obj.rfind('.');
@@ -728,20 +855,17 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       std::string relativeObjI = relativeObjBase + ".i";
       std::string objI = objBase + ".i";
 
-      std::string preprocessEcho = "Preprocessing ";
-      preprocessEcho += lang;
-      preprocessEcho += " source to ";
-      preprocessEcho += objI;
+      std::string preprocessEcho =
+        cmStrCat("Preprocessing ", lang, " source to ", objI);
       this->LocalGenerator->AppendEcho(
         commands, preprocessEcho, cmLocalUnixMakefileGenerator3::EchoBuild);
 
-      std::string preprocessRuleVar = "CMAKE_";
-      preprocessRuleVar += lang;
-      preprocessRuleVar += "_CREATE_PREPROCESSED_SOURCE";
+      std::string preprocessRuleVar =
+        cmStrCat("CMAKE_", lang, "_CREATE_PREPROCESSED_SOURCE");
       if (const char* preprocessRule =
             this->Makefile->GetDefinition(preprocessRuleVar)) {
-        std::vector<std::string> preprocessCommands;
-        cmSystemTools::ExpandListArgument(preprocessRule, preprocessCommands);
+        std::vector<std::string> preprocessCommands =
+          cmExpandedList(preprocessRule);
 
         std::string shellObjI = this->LocalGenerator->ConvertToOutputFormat(
           objI, cmOutputConverter::SHELL);
@@ -758,12 +882,12 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
           preprocessCommands,
           this->LocalGenerator->GetCurrentBinaryDirectory(),
           this->LocalGenerator->GetBinaryDirectory());
-        commands.insert(commands.end(), preprocessCommands.begin(),
-                        preprocessCommands.end());
+        cmAppend(commands, preprocessCommands);
       } else {
-        std::string cmd = "$(CMAKE_COMMAND) -E cmake_unimplemented_variable ";
-        cmd += preprocessRuleVar;
-        commands.push_back(cmd);
+        std::string cmd =
+          cmStrCat("$(CMAKE_COMMAND) -E cmake_unimplemented_variable ",
+                   preprocessRuleVar);
+        commands.push_back(std::move(cmd));
       }
 
       this->LocalGenerator->WriteMakeRule(*this->BuildFileStream, nullptr,
@@ -776,20 +900,17 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
       std::string relativeObjS = relativeObjBase + ".s";
       std::string objS = objBase + ".s";
 
-      std::string assemblyEcho = "Compiling ";
-      assemblyEcho += lang;
-      assemblyEcho += " source to assembly ";
-      assemblyEcho += objS;
+      std::string assemblyEcho =
+        cmStrCat("Compiling ", lang, " source to assembly ", objS);
       this->LocalGenerator->AppendEcho(
         commands, assemblyEcho, cmLocalUnixMakefileGenerator3::EchoBuild);
 
-      std::string assemblyRuleVar = "CMAKE_";
-      assemblyRuleVar += lang;
-      assemblyRuleVar += "_CREATE_ASSEMBLY_SOURCE";
+      std::string assemblyRuleVar =
+        cmStrCat("CMAKE_", lang, "_CREATE_ASSEMBLY_SOURCE");
       if (const char* assemblyRule =
             this->Makefile->GetDefinition(assemblyRuleVar)) {
-        std::vector<std::string> assemblyCommands;
-        cmSystemTools::ExpandListArgument(assemblyRule, assemblyCommands);
+        std::vector<std::string> assemblyCommands =
+          cmExpandedList(assemblyRule);
 
         std::string shellObjS = this->LocalGenerator->ConvertToOutputFormat(
           objS, cmOutputConverter::SHELL);
@@ -805,12 +926,12 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
         this->LocalGenerator->CreateCDCommand(
           assemblyCommands, this->LocalGenerator->GetCurrentBinaryDirectory(),
           this->LocalGenerator->GetBinaryDirectory());
-        commands.insert(commands.end(), assemblyCommands.begin(),
-                        assemblyCommands.end());
+        cmAppend(commands, assemblyCommands);
       } else {
-        std::string cmd = "$(CMAKE_COMMAND) -E cmake_unimplemented_variable ";
-        cmd += assemblyRuleVar;
-        commands.push_back(cmd);
+        std::string cmd =
+          cmStrCat("$(CMAKE_COMMAND) -E cmake_unimplemented_variable ",
+                   assemblyRuleVar);
+        commands.push_back(std::move(cmd));
       }
 
       this->LocalGenerator->WriteMakeRule(*this->BuildFileStream, nullptr,
@@ -818,65 +939,6 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
                                           commands, false);
     }
   }
-
-  // If the language needs provides-requires mode, create the
-  // corresponding targets.
-  std::string objectRequires = relativeObj;
-  objectRequires += ".requires";
-  std::vector<std::string> p_depends;
-  // always provide an empty requires target
-  this->LocalGenerator->WriteMakeRule(*this->BuildFileStream, nullptr,
-                                      objectRequires, p_depends, no_commands,
-                                      true);
-
-  // write a build rule to recursively build what this obj provides
-  std::string objectProvides = relativeObj;
-  objectProvides += ".provides";
-  std::string temp = relativeObj;
-  temp += ".provides.build";
-  std::vector<std::string> r_commands;
-  std::string tgtMakefileName =
-    this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget);
-  tgtMakefileName += "/build.make";
-  r_commands.push_back(
-    this->LocalGenerator->GetRecursiveMakeCall(tgtMakefileName.c_str(), temp));
-
-  p_depends.clear();
-  p_depends.push_back(objectRequires);
-  this->LocalGenerator->WriteMakeRule(*this->BuildFileStream, nullptr,
-                                      objectProvides, p_depends, r_commands,
-                                      true);
-
-  // write the provides.build rule dependency on the obj file
-  p_depends.clear();
-  p_depends.push_back(relativeObj);
-  this->LocalGenerator->WriteMakeRule(*this->BuildFileStream, nullptr, temp,
-                                      p_depends, no_commands, false);
-}
-
-void cmMakefileTargetGenerator::WriteTargetRequiresRules()
-{
-  std::vector<std::string> depends;
-  std::vector<std::string> no_commands;
-
-  // Construct the name of the dependency generation target.
-  std::string depTarget =
-    this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget);
-  depTarget += "/requires";
-
-  // This target drives dependency generation for all object files.
-  std::string relPath = this->LocalGenerator->GetHomeRelativeOutputPath();
-  std::string objTarget;
-  for (std::string const& obj : this->Objects) {
-    objTarget = relPath;
-    objTarget += obj;
-    objTarget += ".requires";
-    depends.push_back(objTarget);
-  }
-
-  // Write the rule.
-  this->LocalGenerator->WriteMakeRule(*this->BuildFileStream, nullptr,
-                                      depTarget, depends, no_commands, true);
 }
 
 void cmMakefileTargetGenerator::WriteTargetCleanRules()
@@ -885,9 +947,9 @@ void cmMakefileTargetGenerator::WriteTargetCleanRules()
   std::vector<std::string> commands;
 
   // Construct the clean target name.
-  std::string cleanTarget =
-    this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget);
-  cleanTarget += "/clean";
+  std::string cleanTarget = cmStrCat(
+    this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget),
+    "/clean");
 
   // Construct the clean command.
   this->LocalGenerator->AppendCleanCommand(commands, this->CleanFiles,
@@ -934,18 +996,17 @@ bool cmMakefileTargetGenerator::WriteMakeRule(
   // For multiple outputs, make the extra ones depend on the first one.
   std::vector<std::string> const output_depends(1, outputs[0]);
   std::string binDir = this->LocalGenerator->GetBinaryDirectory();
-  for (std::vector<std::string>::const_iterator o = outputs.begin() + 1;
-       o != outputs.end(); ++o) {
+  for (std::string const& output : cmMakeRange(outputs).advance(1)) {
     // Touch the extra output so "make" knows that it was updated,
-    // but only if the output was acually created.
+    // but only if the output was actually created.
     std::string const out = this->LocalGenerator->ConvertToOutputFormat(
-      this->LocalGenerator->MaybeConvertToRelativePath(binDir, *o),
+      this->LocalGenerator->MaybeConvertToRelativePath(binDir, output),
       cmOutputConverter::SHELL);
     std::vector<std::string> output_commands;
 
     bool o_symbolic = false;
     if (need_symbolic) {
-      if (cmSourceFile* sf = this->Makefile->GetSource(*o)) {
+      if (cmSourceFile* sf = this->Makefile->GetSource(output)) {
         o_symbolic = sf->GetPropertyAsBool("SYMBOLIC");
       }
     }
@@ -954,13 +1015,13 @@ bool cmMakefileTargetGenerator::WriteMakeRule(
     if (!o_symbolic) {
       output_commands.push_back("@$(CMAKE_COMMAND) -E touch_nocreate " + out);
     }
-    this->LocalGenerator->WriteMakeRule(os, nullptr, *o, output_depends,
+    this->LocalGenerator->WriteMakeRule(os, nullptr, output, output_depends,
                                         output_commands, o_symbolic, in_help);
 
     if (!o_symbolic) {
       // At build time, remove the first output if this one does not exist
       // so that "make" will rerun the real commands that create this one.
-      MultipleOutputPairsType::value_type p(*o, outputs[0]);
+      MultipleOutputPairsType::value_type p(output, outputs[0]);
       this->MultipleOutputPairs.insert(p);
     }
   }
@@ -972,16 +1033,14 @@ void cmMakefileTargetGenerator::WriteTargetDependRules()
   // must write the targets depend info file
   std::string dir =
     this->LocalGenerator->GetTargetDirectory(this->GeneratorTarget);
-  this->InfoFileNameFull = dir;
-  this->InfoFileNameFull += "/DependInfo.cmake";
+  this->InfoFileNameFull = cmStrCat(dir, "/DependInfo.cmake");
   this->InfoFileNameFull =
     this->LocalGenerator->ConvertToFullPath(this->InfoFileNameFull);
-  this->InfoFileStream =
-    new cmGeneratedFileStream(this->InfoFileNameFull.c_str());
-  this->InfoFileStream->SetCopyIfDifferent(true);
-  if (!*this->InfoFileStream) {
+  this->InfoFileStream = new cmGeneratedFileStream(this->InfoFileNameFull);
+  if (!this->InfoFileStream) {
     return;
   }
+  this->InfoFileStream->SetCopyIfDifferent(true);
   this->LocalGenerator->WriteDependLanguageInfo(*this->InfoFileStream,
                                                 this->GeneratorTarget);
 
@@ -1033,9 +1092,9 @@ void cmMakefileTargetGenerator::WriteTargetDependRules()
   std::vector<std::string> commands;
 
   // Construct the name of the dependency generation target.
-  std::string depTarget =
-    this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget);
-  depTarget += "/depend";
+  std::string depTarget = cmStrCat(
+    this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget),
+    "/depend");
 
   // Add a command to call CMake to scan dependencies.  CMake will
   // touch the corresponding depends file after scanning dependencies.
@@ -1047,10 +1106,11 @@ void cmMakefileTargetGenerator::WriteTargetDependRules()
   // paths.  Make sure PWD is set to the original name of the home
   // output directory to help cmSystemTools to create the same
   // translation table for the dependency scanning process.
-  depCmd << "cd " << (this->LocalGenerator->ConvertToOutputFormat(
-                       cmSystemTools::CollapseFullPath(
-                         this->LocalGenerator->GetBinaryDirectory()),
-                       cmOutputConverter::SHELL))
+  depCmd << "cd "
+         << (this->LocalGenerator->ConvertToOutputFormat(
+              cmSystemTools::CollapseFullPath(
+                this->LocalGenerator->GetBinaryDirectory()),
+              cmOutputConverter::SHELL))
          << " && ";
 #endif
   // Generate a call this signature:
@@ -1113,8 +1173,7 @@ void cmMakefileTargetGenerator::DriveCustomCommands(
     if (cmCustomCommand* cc = source->GetCustomCommand()) {
       cmCustomCommandGenerator ccg(*cc, this->ConfigName,
                                    this->LocalGenerator);
-      const std::vector<std::string>& outputs = ccg.GetOutputs();
-      depends.insert(depends.end(), outputs.begin(), outputs.end());
+      cmAppend(depends, ccg.GetOutputs());
     }
   }
 }
@@ -1126,7 +1185,7 @@ void cmMakefileTargetGenerator::WriteObjectDependRules(
   // shared between the object file and dependency scanning rule.
   depends.push_back(source.GetFullPath());
   if (const char* objectDeps = source.GetProperty("OBJECT_DEPENDS")) {
-    cmSystemTools::ExpandListArgument(objectDeps, depends);
+    cmExpandList(objectDeps, depends);
   }
 }
 
@@ -1173,16 +1232,15 @@ void cmMakefileTargetGenerator::GenerateCustomRuleFile(
     std::string objFullPath = cmSystemTools::CollapseFullPath(outputs[0]);
     std::string srcFullPath = cmSystemTools::CollapseFullPath(idi.second);
     this->LocalGenerator->AddImplicitDepends(this->GeneratorTarget, idi.first,
-                                             objFullPath.c_str(),
-                                             srcFullPath.c_str());
+                                             objFullPath, srcFullPath);
   }
 }
 
 void cmMakefileTargetGenerator::MakeEchoProgress(
   cmLocalUnixMakefileGenerator3::EchoProgress& progress) const
 {
-  progress.Dir = this->LocalGenerator->GetBinaryDirectory();
-  progress.Dir += cmake::GetCMakeFilesDirectory();
+  progress.Dir =
+    cmStrCat(this->LocalGenerator->GetBinaryDirectory(), "/CMakeFiles");
   std::ostringstream progressArg;
   progressArg << "$(CMAKE_PROGRESS_" << this->NumberOfProgressActions << ")";
   progress.Arg = progressArg.str();
@@ -1205,10 +1263,18 @@ void cmMakefileTargetGenerator::WriteObjectsVariable(
   if (!lineContinue) {
     lineContinue = "\\";
   }
+
+  const char* pchExtension =
+    this->Makefile->GetDefinition("CMAKE_PCH_EXTENSION");
+
   for (std::string const& obj : this->Objects) {
+    if (cmSystemTools::StringEndsWith(obj, pchExtension)) {
+      continue;
+    }
     *this->BuildFileStream << " " << lineContinue << "\n";
-    *this->BuildFileStream << this->LocalGenerator->ConvertToQuotedOutputPath(
-      obj.c_str(), useWatcomQuote);
+    *this->BuildFileStream
+      << cmLocalUnixMakefileGenerator3::ConvertToQuotedOutputPath(
+           obj, useWatcomQuote);
   }
   *this->BuildFileStream << "\n";
 
@@ -1229,8 +1295,9 @@ void cmMakefileTargetGenerator::WriteObjectsVariable(
     object =
       this->LocalGenerator->MaybeConvertToRelativePath(currentBinDir, obj);
     *this->BuildFileStream << " " << lineContinue << "\n";
-    *this->BuildFileStream << this->LocalGenerator->ConvertToQuotedOutputPath(
-      obj.c_str(), useWatcomQuote);
+    *this->BuildFileStream
+      << cmLocalUnixMakefileGenerator3::ConvertToQuotedOutputPath(
+           obj, useWatcomQuote);
   }
   *this->BuildFileStream << "\n"
                          << "\n";
@@ -1277,11 +1344,10 @@ public:
 private:
   std::string MaybeConvertToRelativePath(std::string const& obj)
   {
-    if (!cmOutputConverter::ContainedInDirectory(
-          this->StateDir.GetCurrentBinary(), obj, this->StateDir)) {
+    if (!this->StateDir.ContainsBoth(this->StateDir.GetCurrentBinary(), obj)) {
       return obj;
     }
-    return cmOutputConverter::ForceToRelativePath(
+    return cmSystemTools::ForceToRelativePath(
       this->StateDir.GetCurrentBinary(), obj);
   }
 
@@ -1297,10 +1363,16 @@ private:
 void cmMakefileTargetGenerator::WriteObjectsStrings(
   std::vector<std::string>& objStrings, std::string::size_type limit)
 {
+  const char* pchExtension =
+    this->Makefile->GetDefinition("CMAKE_PCH_EXTENSION");
+
   cmMakefileTargetGeneratorObjectStrings helper(
     objStrings, this->LocalGenerator,
     this->LocalGenerator->GetStateSnapshot().GetDirectory(), limit);
   for (std::string const& obj : this->Objects) {
+    if (cmSystemTools::StringEndsWith(obj, pchExtension)) {
+      continue;
+    }
     helper.Feed(obj);
   }
   for (std::string const& obj : this->ExternalObjects) {
@@ -1315,8 +1387,8 @@ void cmMakefileTargetGenerator::WriteTargetDriverRule(
   // Compute the name of the driver target.
   std::string dir =
     this->LocalGenerator->GetRelativeTargetDirectory(this->GeneratorTarget);
-  std::string buildTargetRuleName = dir;
-  buildTargetRuleName += relink ? "/preinstall" : "/build";
+  std::string buildTargetRuleName =
+    cmStrCat(dir, relink ? "/preinstall" : "/build");
   buildTargetRuleName = this->LocalGenerator->MaybeConvertToRelativePath(
     this->LocalGenerator->GetBinaryDirectory(), buildTargetRuleName);
 
@@ -1338,8 +1410,7 @@ void cmMakefileTargetGenerator::WriteTargetDriverRule(
     }
 
     // Make sure the extra files are built.
-    depends.insert(depends.end(), this->ExtraFiles.begin(),
-                   this->ExtraFiles.end());
+    cmAppend(depends, this->ExtraFiles);
   }
 
   // Write the driver rule.
@@ -1358,11 +1429,10 @@ void cmMakefileTargetGenerator::AppendTargetDepends(
   }
 
   // Loop over all library dependencies.
-  const char* cfg = this->LocalGenerator->GetConfigName().c_str();
+  const std::string& cfg = this->LocalGenerator->GetConfigName();
   if (cmComputeLinkInformation* cli =
         this->GeneratorTarget->GetLinkInformation(cfg)) {
-    std::vector<std::string> const& libDeps = cli->GetDepends();
-    depends.insert(depends.end(), libDeps.begin(), libDeps.end());
+    cmAppend(depends, cli->GetDepends());
   }
 }
 
@@ -1370,17 +1440,15 @@ void cmMakefileTargetGenerator::AppendObjectDepends(
   std::vector<std::string>& depends)
 {
   // Add dependencies on the compiled object files.
-  std::string relPath = this->LocalGenerator->GetHomeRelativeOutputPath();
-  std::string objTarget;
+  std::string const& relPath =
+    this->LocalGenerator->GetHomeRelativeOutputPath();
   for (std::string const& obj : this->Objects) {
-    objTarget = relPath;
-    objTarget += obj;
-    depends.push_back(objTarget);
+    std::string objTarget = cmStrCat(relPath, obj);
+    depends.push_back(std::move(objTarget));
   }
 
   // Add dependencies on the external object files.
-  depends.insert(depends.end(), this->ExternalObjects.begin(),
-                 this->ExternalObjects.end());
+  cmAppend(depends, this->ExternalObjects);
 
   // Add a dependency on the rule file itself.
   this->LocalGenerator->AppendRuleDepend(depends,
@@ -1388,7 +1456,7 @@ void cmMakefileTargetGenerator::AppendObjectDepends(
 }
 
 void cmMakefileTargetGenerator::AppendLinkDepends(
-  std::vector<std::string>& depends)
+  std::vector<std::string>& depends, const std::string& linkLanguage)
 {
   this->AppendObjectDepends(depends);
 
@@ -1412,20 +1480,18 @@ void cmMakefileTargetGenerator::AppendLinkDepends(
   }
 
   // Add user-specified dependencies.
-  if (const char* linkDepends =
-        this->GeneratorTarget->GetProperty("LINK_DEPENDS")) {
-    cmSystemTools::ExpandListArgument(linkDepends, depends);
-  }
+  this->GeneratorTarget->GetLinkDepends(depends, this->ConfigName,
+                                        linkLanguage);
 }
 
 std::string cmMakefileTargetGenerator::GetLinkRule(
   const std::string& linkRuleVar)
 {
   std::string linkRule = this->Makefile->GetRequiredDefinition(linkRuleVar);
-  if (this->GeneratorTarget->HasImplibGNUtoMS()) {
-    std::string ruleVar = "CMAKE_";
-    ruleVar += this->GeneratorTarget->GetLinkerLanguage(this->ConfigName);
-    ruleVar += "_GNUtoMS_RULE";
+  if (this->GeneratorTarget->HasImplibGNUtoMS(this->ConfigName)) {
+    std::string ruleVar = cmStrCat(
+      "CMAKE_", this->GeneratorTarget->GetLinkerLanguage(this->ConfigName),
+      "_GNUtoMS_RULE");
     if (const char* rule = this->Makefile->GetDefinition(ruleVar)) {
       linkRule += rule;
     }
@@ -1446,10 +1512,9 @@ void cmMakefileTargetGenerator::CreateLinkScript(
   std::vector<std::string>& makefile_depends)
 {
   // Create the link script file.
-  std::string linkScriptName = this->TargetBuildDirectoryFull;
-  linkScriptName += "/";
-  linkScriptName += name;
-  cmGeneratedFileStream linkScriptStream(linkScriptName.c_str());
+  std::string linkScriptName =
+    cmStrCat(this->TargetBuildDirectoryFull, '/', name);
+  cmGeneratedFileStream linkScriptStream(linkScriptName);
   linkScriptStream.SetCopyIfDifferent(true);
   for (std::string const& link_command : link_commands) {
     // Do not write out empty commands or commands beginning in the
@@ -1460,14 +1525,15 @@ void cmMakefileTargetGenerator::CreateLinkScript(
   }
 
   // Create the makefile command to invoke the link script.
-  std::string link_command = "$(CMAKE_COMMAND) -E cmake_link_script ";
-  link_command += this->LocalGenerator->ConvertToOutputFormat(
-    this->LocalGenerator->MaybeConvertToRelativePath(
-      this->LocalGenerator->GetCurrentBinaryDirectory(), linkScriptName),
-    cmOutputConverter::SHELL);
-  link_command += " --verbose=$(VERBOSE)";
-  makefile_commands.push_back(link_command);
-  makefile_depends.push_back(linkScriptName);
+  std::string link_command = cmStrCat(
+    "$(CMAKE_COMMAND) -E cmake_link_script ",
+    this->LocalGenerator->ConvertToOutputFormat(
+      this->LocalGenerator->MaybeConvertToRelativePath(
+        this->LocalGenerator->GetCurrentBinaryDirectory(), linkScriptName),
+      cmOutputConverter::SHELL),
+    " --verbose=$(VERBOSE)");
+  makefile_commands.push_back(std::move(link_command));
+  makefile_depends.push_back(std::move(linkScriptName));
 }
 
 bool cmMakefileTargetGenerator::CheckUseResponseFileForObjects(
@@ -1478,7 +1544,7 @@ bool cmMakefileTargetGenerator::CheckUseResponseFileForObjects(
     "CMAKE_" + l + "_USE_RESPONSE_FILE_FOR_OBJECTS";
   if (const char* val = this->Makefile->GetDefinition(responseVar)) {
     if (*val) {
-      return cmSystemTools::IsOn(val);
+      return cmIsOn(val);
     }
   }
 
@@ -1517,7 +1583,7 @@ bool cmMakefileTargetGenerator::CheckUseResponseFileForLibraries(
     "CMAKE_" + l + "_USE_RESPONSE_FILE_FOR_LIBRARIES";
   if (const char* val = this->Makefile->GetDefinition(responseVar)) {
     if (*val) {
-      return cmSystemTools::IsOn(val);
+      return cmIsOn(val);
     }
   }
 
@@ -1530,21 +1596,19 @@ std::string cmMakefileTargetGenerator::CreateResponseFile(
   std::vector<std::string>& makefile_depends)
 {
   // Create the response file.
-  std::string responseFileNameFull = this->TargetBuildDirectoryFull;
-  responseFileNameFull += "/";
-  responseFileNameFull += name;
-  cmGeneratedFileStream responseStream(responseFileNameFull.c_str());
+  std::string responseFileNameFull =
+    cmStrCat(this->TargetBuildDirectoryFull, '/', name);
+  cmGeneratedFileStream responseStream(responseFileNameFull);
   responseStream.SetCopyIfDifferent(true);
   responseStream << options << "\n";
 
   // Add a dependency so the target will rebuild when the set of
   // objects changes.
-  makefile_depends.push_back(responseFileNameFull);
+  makefile_depends.push_back(std::move(responseFileNameFull));
 
   // Construct the name to be used on the command line.
-  std::string responseFileName = this->TargetBuildDirectory;
-  responseFileName += "/";
-  responseFileName += name;
+  std::string responseFileName =
+    cmStrCat(this->TargetBuildDirectory, '/', name);
   return responseFileName;
 }
 
@@ -1565,9 +1629,8 @@ void cmMakefileTargetGenerator::CreateLinkLibs(
 {
   std::string frameworkPath;
   std::string linkPath;
-  std::string config = this->Makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
   cmComputeLinkInformation* pcli =
-    this->GeneratorTarget->GetLinkInformation(config);
+    this->GeneratorTarget->GetLinkInformation(this->ConfigName);
   this->LocalGenerator->OutputLinkLibraries(pcli, linkLineComputer, linkLibs,
                                             frameworkPath, linkPath);
   linkLibs = frameworkPath + linkPath + linkLibs;
@@ -1575,10 +1638,9 @@ void cmMakefileTargetGenerator::CreateLinkLibs(
   if (useResponseFile &&
       linkLibs.find_first_not_of(' ') != std::string::npos) {
     // Lookup the response file reference flag.
-    std::string responseFlagVar = "CMAKE_";
-    responseFlagVar +=
-      this->GeneratorTarget->GetLinkerLanguage(this->ConfigName);
-    responseFlagVar += "_RESPONSE_FILE_LINK_FLAG";
+    std::string responseFlagVar = cmStrCat(
+      "CMAKE_", this->GeneratorTarget->GetLinkerLanguage(this->ConfigName),
+      "_RESPONSE_FILE_LINK_FLAG");
     const char* responseFlag = this->Makefile->GetDefinition(responseFlagVar);
     if (!responseFlag) {
       responseFlag = "@";
@@ -1589,9 +1651,9 @@ void cmMakefileTargetGenerator::CreateLinkLibs(
       this->CreateResponseFile("linklibs.rsp", linkLibs, makefile_depends);
 
     // Reference the response file.
-    linkLibs = responseFlag;
-    linkLibs += this->LocalGenerator->ConvertToOutputFormat(
-      link_rsp, cmOutputConverter::SHELL);
+    linkLibs = cmStrCat(responseFlag,
+                        this->LocalGenerator->ConvertToOutputFormat(
+                          link_rsp, cmOutputConverter::SHELL));
   }
 }
 
@@ -1613,10 +1675,9 @@ void cmMakefileTargetGenerator::CreateObjectLists(
     this->WriteObjectsStrings(object_strings, responseFileLimit);
 
     // Lookup the response file reference flag.
-    std::string responseFlagVar = "CMAKE_";
-    responseFlagVar +=
-      this->GeneratorTarget->GetLinkerLanguage(this->ConfigName);
-    responseFlagVar += "_RESPONSE_FILE_LINK_FLAG";
+    std::string responseFlagVar = cmStrCat(
+      "CMAKE_", this->GeneratorTarget->GetLinkerLanguage(this->ConfigName),
+      "_RESPONSE_FILE_LINK_FLAG");
     const char* responseFlag = this->Makefile->GetDefinition(responseFlagVar);
     if (!responseFlag) {
       responseFlag = "@";
@@ -1649,39 +1710,39 @@ void cmMakefileTargetGenerator::CreateObjectLists(
       buildObjs = objStrings[0];
     }
   } else {
-    buildObjs = "$(";
-    buildObjs += variableName;
-    buildObjs += ") $(";
-    buildObjs += variableNameExternal;
-    buildObjs += ")";
+    buildObjs =
+      cmStrCat("$(", variableName, ") $(", variableNameExternal, ')');
   }
 }
 
 void cmMakefileTargetGenerator::AddIncludeFlags(std::string& flags,
                                                 const std::string& lang)
 {
-  std::string responseVar = "CMAKE_";
-  responseVar += lang;
-  responseVar += "_USE_RESPONSE_FILE_FOR_INCLUDES";
+  std::string responseVar =
+    cmStrCat("CMAKE_", lang, "_USE_RESPONSE_FILE_FOR_INCLUDES");
   bool useResponseFile = this->Makefile->IsOn(responseVar);
 
   std::vector<std::string> includes;
-  const std::string& config =
-    this->Makefile->GetSafeDefinition("CMAKE_BUILD_TYPE");
   this->LocalGenerator->GetIncludeDirectories(includes, this->GeneratorTarget,
-                                              lang, config);
+                                              lang, this->ConfigName);
 
   std::string includeFlags = this->LocalGenerator->GetIncludeFlags(
-    includes, this->GeneratorTarget, lang, false, useResponseFile, config);
+    includes, this->GeneratorTarget, lang, false, useResponseFile,
+    this->ConfigName);
   if (includeFlags.empty()) {
     return;
   }
 
   if (useResponseFile) {
-    std::string name = "includes_";
-    name += lang;
-    name += ".rsp";
-    std::string arg = "@" +
+    std::string const responseFlagVar =
+      "CMAKE_" + lang + "_RESPONSE_FILE_FLAG";
+    std::string responseFlag =
+      this->Makefile->GetSafeDefinition(responseFlagVar);
+    if (responseFlag.empty()) {
+      responseFlag = "@";
+    }
+    std::string name = cmStrCat("includes_", lang, ".rsp");
+    std::string arg = std::move(responseFlag) +
       this->CreateResponseFile(name.c_str(), includeFlags,
                                this->FlagFileDepends[lang]);
     this->LocalGenerator->AppendFlags(flags, arg);
@@ -1699,22 +1760,28 @@ void cmMakefileTargetGenerator::GenDefFile(
     return;
   }
   std::string cmd = cmSystemTools::GetCMakeCommand();
-  cmd =
-    this->LocalGenerator->ConvertToOutputFormat(cmd, cmOutputConverter::SHELL);
-  cmd += " -E __create_def ";
-  cmd += this->LocalGenerator->ConvertToOutputFormat(
-    this->LocalGenerator->MaybeConvertToRelativePath(
-      this->LocalGenerator->GetCurrentBinaryDirectory(), mdi->DefFile),
-    cmOutputConverter::SHELL);
-  cmd += " ";
+  cmd = cmStrCat(
+    this->LocalGenerator->ConvertToOutputFormat(cmd, cmOutputConverter::SHELL),
+    " -E __create_def ",
+    this->LocalGenerator->ConvertToOutputFormat(
+      this->LocalGenerator->MaybeConvertToRelativePath(
+        this->LocalGenerator->GetCurrentBinaryDirectory(), mdi->DefFile),
+      cmOutputConverter::SHELL),
+    ' ');
   std::string objlist_file = mdi->DefFile + ".objs";
   cmd += this->LocalGenerator->ConvertToOutputFormat(
     this->LocalGenerator->MaybeConvertToRelativePath(
       this->LocalGenerator->GetCurrentBinaryDirectory(), objlist_file),
     cmOutputConverter::SHELL);
+  const char* nm_executable = this->Makefile->GetDefinition("CMAKE_NM");
+  if (nm_executable && *nm_executable) {
+    cmd += " --nm=";
+    cmd += this->LocalCommonGenerator->ConvertToOutputFormat(
+      nm_executable, cmOutputConverter::SHELL);
+  }
   real_link_commands.insert(real_link_commands.begin(), cmd);
   // create a list of obj files for the -E __create_def to read
-  cmGeneratedFileStream fout(objlist_file.c_str());
+  cmGeneratedFileStream fout(objlist_file);
 
   if (mdi->WindowsExportAllSymbols) {
     for (std::string const& obj : this->Objects) {

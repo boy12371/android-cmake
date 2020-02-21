@@ -2,6 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "QCMakeCacheView.h"
 
+#include "QCMakeWidgets.h"
 #include <QApplication>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -10,8 +11,6 @@
 #include <QMetaProperty>
 #include <QSortFilterProxyModel>
 #include <QStyle>
-
-#include "QCMakeWidgets.h"
 
 // filter for searches
 class QCMakeSearchFilter : public QSortFilterProxyModel
@@ -186,9 +185,7 @@ QCMakeCacheModel::QCMakeCacheModel(QObject* p)
   this->setHorizontalHeaderLabels(labels);
 }
 
-QCMakeCacheModel::~QCMakeCacheModel()
-{
-}
+QCMakeCacheModel::~QCMakeCacheModel() = default;
 
 static uint qHash(const QCMakeProperty& p)
 {
@@ -212,7 +209,8 @@ void QCMakeCacheModel::clear()
 
 void QCMakeCacheModel::setProperties(const QCMakePropertyList& props)
 {
-  QSet<QCMakeProperty> newProps, newProps2;
+  QSet<QCMakeProperty> newProps;
+  QSet<QCMakeProperty> newProps2;
 
   if (this->ShowNewProperties) {
     newProps = props.toSet();
@@ -248,9 +246,9 @@ void QCMakeCacheModel::setProperties(const QCMakePropertyList& props)
     }
   } else if (this->View == GroupView) {
     QMap<QString, QCMakePropertyList> newPropsTree;
-    this->breakProperties(newProps, newPropsTree);
+    QCMakeCacheModel::breakProperties(newProps, newPropsTree);
     QMap<QString, QCMakePropertyList> newPropsTree2;
-    this->breakProperties(newProps2, newPropsTree2);
+    QCMakeCacheModel::breakProperties(newProps2, newPropsTree2);
 
     QStandardItem* root = this->invisibleRootItem();
 
@@ -614,7 +612,7 @@ bool QCMakeCacheModelDelegate::editorEvent(QEvent* e,
 // Can remove this function and FileDialogFlag when minimum Qt version is 4.5
 bool QCMakeCacheModelDelegate::eventFilter(QObject* object, QEvent* evt)
 {
-  // workaround for what looks like a bug in Qt on Mac OS X
+  // workaround for what looks like a bug in Qt on macOS
   // where it doesn't create a QWidget wrapper for the native file dialog
   // so the Qt library ends up assuming the focus was lost to something else
 

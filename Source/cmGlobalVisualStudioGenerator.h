@@ -32,21 +32,34 @@ public:
   /** Known versions of Visual Studio.  */
   enum VSVersion
   {
-    VS8 = 80,
     VS9 = 90,
     VS10 = 100,
     VS11 = 110,
     VS12 = 120,
     /* VS13 = 130 was skipped */
     VS14 = 140,
-    VS15 = 150
+    VS15 = 150,
+    VS16 = 160
   };
 
-  cmGlobalVisualStudioGenerator(cmake* cm);
   virtual ~cmGlobalVisualStudioGenerator();
 
   VSVersion GetVersion() const;
   void SetVersion(VSVersion v);
+
+  /** Is the installed VS an Express edition?  */
+  bool IsExpressEdition() const { return this->ExpressEdition; }
+
+  void EnableLanguage(std::vector<std::string> const& languages, cmMakefile*,
+                      bool optional) override;
+
+  bool SetGeneratorPlatform(std::string const& p, cmMakefile* mf) override;
+
+  /**
+   * Get the name of the target platform (architecture) for which we generate.
+   * The names are as defined by VS, e.g. "Win32", "x64", "Itanium", "ARM".
+   */
+  std::string const& GetPlatformName() const;
 
   /**
    * Configure CMake's Visual Studio macros file into the user's Visual
@@ -77,16 +90,10 @@ public:
    * Call the ReloadProjects macro if necessary based on
    * GetFilesReplacedDuringGenerate results.
    */
-  void CallVisualStudioMacro(MacroName m, const char* vsSolutionFile = 0);
+  void CallVisualStudioMacro(MacroName m, const std::string& vsSolutionFile);
 
   // return true if target is fortran only
   bool TargetIsFortranOnly(const cmGeneratorTarget* gt);
-
-  // return true if target is C# only
-  static bool TargetIsCSharpOnly(cmGeneratorTarget const* gt);
-
-  // return true if target can be referenced by C# targets
-  bool TargetCanBeReferenced(cmGeneratorTarget const* gt);
 
   /** Get the top-level registry key for this VS version.  */
   std::string GetRegistryBase();
@@ -96,10 +103,19 @@ public:
 
   /** Return true if the generated build tree may contain multiple builds.
       i.e. "Can I build Debug and Release in the same tree?" */
-  virtual bool IsMultiConfig() const { return true; }
+  bool IsMultiConfig() const override { return true; }
 
   /** Return true if building for Windows CE */
   virtual bool TargetsWindowsCE() const { return false; }
+
+  bool IsIncludeExternalMSProjectSupported() const override { return true; }
+
+  /** Get encoding used by generator for generated source files
+   */
+  codecvt::Encoding GetMakefileEncoding() const override
+  {
+    return codecvt::ANSI;
+  }
 
   class TargetSet : public std::set<cmGeneratorTarget const*>
   {
@@ -120,10 +136,10 @@ public:
 
   bool FindMakeProgram(cmMakefile*) override;
 
-  virtual std::string ExpandCFGIntDir(const std::string& str,
-                                      const std::string& config) const;
+  std::string ExpandCFGIntDir(const std::string& str,
+                              const std::string& config) const override;
 
-  void ComputeTargetObjectDirectory(cmGeneratorTarget* gt) const;
+  void ComputeTargetObjectDirectory(cmGeneratorTarget* gt) const override;
 
   std::string GetStartupProjectName(cmLocalGenerator const* root) const;
 
@@ -131,17 +147,25 @@ public:
                               std::vector<cmCustomCommand>& commands,
                               std::string const& configName);
 
+  bool Open(const std::string& bindir, const std::string& projectName,
+            bool dryRun) override;
+
 protected:
-  virtual void AddExtraIDETargets();
+  cmGlobalVisualStudioGenerator(cmake* cm,
+                                std::string const& platformInGeneratorName);
+
+  void AddExtraIDETargets() override;
 
   // Does this VS version link targets to each other if there are
   // dependencies in the SLN file?  This was done for VS versions
   // below 8.
   virtual bool VSLinksDependencies() const { return true; }
 
-  virtual const char* GetIDEVersion() = 0;
+  const char* GetIDEVersion() const;
 
-  virtual bool ComputeTargetDepends();
+  void WriteSLNHeader(std::ostream& fout);
+
+  bool ComputeTargetDepends() override;
   class VSDependSet : public std::set<std::string>
   {
   };
@@ -156,16 +180,21 @@ protected:
                                   const std::string&);
   virtual std::string WriteUtilityDepend(cmGeneratorTarget const*) = 0;
   std::string GetUtilityDepend(const cmGeneratorTarget* target);
-  typedef std::map<cmGeneratorTarget const*, std::string> UtilityDependsMap;
+  using UtilityDependsMap = std::map<cmGeneratorTarget const*, std::string>;
   UtilityDependsMap UtilityDepends;
 
 protected:
   VSVersion Version;
+  bool ExpressEdition;
+
+  std::string GeneratorPlatform;
+  std::string DefaultPlatformName;
+  bool PlatformInGeneratorName = false;
 
 private:
   virtual std::string GetVSMakeProgram() = 0;
   void PrintCompilerAdvice(std::ostream&, std::string const&,
-                           const char*) const
+                           const char*) const override
   {
   }
 
@@ -184,13 +213,12 @@ class cmGlobalVisualStudioGenerator::OrderedTargetDependSet
   : public std::multiset<cmTargetDepend,
                          cmGlobalVisualStudioGenerator::TargetCompare>
 {
-  typedef std::multiset<cmTargetDepend,
-                        cmGlobalVisualStudioGenerator::TargetCompare>
-    derived;
+  using derived = std::multiset<cmTargetDepend,
+                                cmGlobalVisualStudioGenerator::TargetCompare>;
 
 public:
-  typedef cmGlobalGenerator::TargetDependSet TargetDependSet;
-  typedef cmGlobalVisualStudioGenerator::TargetSet TargetSet;
+  using TargetDependSet = cmGlobalGenerator::TargetDependSet;
+  using TargetSet = cmGlobalVisualStudioGenerator::TargetSet;
   OrderedTargetDependSet(TargetDependSet const&, std::string const& first);
   OrderedTargetDependSet(TargetSet const&, std::string const& first);
 };

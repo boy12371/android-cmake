@@ -5,12 +5,13 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmInstallGenerator.h"
-#include "cmScriptGenerator.h"
-
 #include <iosfwd>
 #include <string>
 #include <vector>
+
+#include "cmInstallGenerator.h"
+#include "cmListFileCache.h"
+#include "cmScriptGenerator.h"
 
 class cmGeneratorTarget;
 class cmLocalGenerator;
@@ -21,11 +22,12 @@ class cmLocalGenerator;
 class cmInstallTargetGenerator : public cmInstallGenerator
 {
 public:
-  cmInstallTargetGenerator(std::string const& targetName, const char* dest,
-                           bool implib, const char* file_permissions,
-                           std::vector<std::string> const& configurations,
-                           const char* component, MessageLevel message,
-                           bool exclude_from_all, bool optional);
+  cmInstallTargetGenerator(
+    std::string targetName, const char* dest, bool implib,
+    const char* file_permissions,
+    std::vector<std::string> const& configurations, const char* component,
+    MessageLevel message, bool exclude_from_all, bool optional,
+    cmListFileBacktrace backtrace = cmListFileBacktrace());
   ~cmInstallTargetGenerator() override;
 
   /** Select the policy for installing shared library linkable name
@@ -56,7 +58,7 @@ public:
                                         const std::string& config,
                                         NameType nameType = NameNormal);
 
-  void Compute(cmLocalGenerator* lg) override;
+  bool Compute(cmLocalGenerator* lg) override;
 
   cmGeneratorTarget* GetTarget() const { return this->Target; }
 
@@ -64,16 +66,17 @@ public:
 
   std::string GetDestination(std::string const& config) const;
 
+  cmListFileBacktrace const& GetBacktrace() const { return this->Backtrace; }
+
 protected:
-  void GenerateScript(std::ostream& os) override;
   void GenerateScriptForConfig(std::ostream& os, const std::string& config,
                                Indent indent) override;
   void GenerateScriptForConfigObjectLibrary(std::ostream& os,
                                             const std::string& config,
                                             Indent indent);
-  typedef void (cmInstallTargetGenerator::*TweakMethod)(std::ostream&, Indent,
-                                                        const std::string&,
-                                                        std::string const&);
+  using TweakMethod = void (cmInstallTargetGenerator::*)(std::ostream&, Indent,
+                                                         const std::string&,
+                                                         const std::string&);
   void AddTweak(std::ostream& os, Indent indent, const std::string& config,
                 std::string const& file, TweakMethod tweak);
   void AddTweak(std::ostream& os, Indent indent, const std::string& config,
@@ -101,6 +104,7 @@ protected:
                      const std::string& toDestDirPath);
   void AddUniversalInstallRule(std::ostream& os, Indent indent,
                                const std::string& toDestDirPath);
+  void IssueCMP0095Warning(const std::string& unescapedRpath);
 
   std::string TargetName;
   cmGeneratorTarget* Target;
@@ -108,6 +112,7 @@ protected:
   NamelinkModeType NamelinkMode;
   bool ImportLibrary;
   bool Optional;
+  cmListFileBacktrace Backtrace;
 };
 
 #endif

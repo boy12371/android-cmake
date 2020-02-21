@@ -2,54 +2,48 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmUnsetCommand.h"
 
-#include <string.h>
-
-#include "cmAlgorithms.h"
+#include "cmExecutionStatus.h"
 #include "cmMakefile.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
-class cmExecutionStatus;
-
 // cmUnsetCommand
-bool cmUnsetCommand::InitialPass(std::vector<std::string> const& args,
-                                 cmExecutionStatus&)
+bool cmUnsetCommand(std::vector<std::string> const& args,
+                    cmExecutionStatus& status)
 {
   if (args.empty() || args.size() > 2) {
-    this->SetError("called with incorrect number of arguments");
+    status.SetError("called with incorrect number of arguments");
     return false;
   }
 
-  const char* variable = args[0].c_str();
+  auto const& variable = args[0];
 
   // unset(ENV{VAR})
-  if (cmHasLiteralPrefix(variable, "ENV{") && strlen(variable) > 5) {
+  if (cmHasLiteralPrefix(variable, "ENV{") && variable.size() > 5) {
     // what is the variable name
-    char* envVarName = new char[strlen(variable)];
-    strncpy(envVarName, variable + 4, strlen(variable) - 5);
-    envVarName[strlen(variable) - 5] = '\0';
+    auto const& envVarName = variable.substr(4, variable.size() - 5);
 
-#ifdef CMAKE_BUILD_WITH_CMAKE
-    cmSystemTools::UnsetEnv(envVarName);
+#ifndef CMAKE_BOOTSTRAP
+    cmSystemTools::UnsetEnv(envVarName.c_str());
 #endif
-    delete[] envVarName;
     return true;
   }
   // unset(VAR)
   if (args.size() == 1) {
-    this->Makefile->RemoveDefinition(variable);
+    status.GetMakefile().RemoveDefinition(variable);
     return true;
   }
   // unset(VAR CACHE)
   if ((args.size() == 2) && (args[1] == "CACHE")) {
-    this->Makefile->RemoveCacheDefinition(variable);
+    status.GetMakefile().RemoveCacheDefinition(variable);
     return true;
   }
   // unset(VAR PARENT_SCOPE)
   if ((args.size() == 2) && (args[1] == "PARENT_SCOPE")) {
-    this->Makefile->RaiseScope(variable, nullptr);
+    status.GetMakefile().RaiseScope(variable, nullptr);
     return true;
   }
   // ERROR: second argument isn't CACHE or PARENT_SCOPE
-  this->SetError("called with an invalid second argument");
+  status.SetError("called with an invalid second argument");
   return false;
 }

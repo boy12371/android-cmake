@@ -1,6 +1,7 @@
 // mfc1.cpp : Defines the class behaviors for the application.
 //
 
+// clang-format off
 #include "stdafx.h"
 
 #include "MainFrm.h"
@@ -9,9 +10,10 @@
 #include "ChildFrm.h"
 #include "mfc1Doc.h"
 #include "mfc1View.h"
+// clang-format on
 
 #ifdef _DEBUG
-#define new DEBUG_NEW
+#  define new DEBUG_NEW
 #endif
 
 // Cmfc1App

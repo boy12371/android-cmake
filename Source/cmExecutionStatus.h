@@ -3,6 +3,12 @@
 #ifndef cmExecutionStatus_h
 #define cmExecutionStatus_h
 
+#include <cmConfigure.h> // IWYU pragma: keep
+
+#include <string>
+
+class cmMakefile;
+
 /** \class cmExecutionStatus
  * \brief Superclass for all command status classes
  *
@@ -11,21 +17,16 @@
 class cmExecutionStatus
 {
 public:
-  cmExecutionStatus()
-    : ReturnInvoked(false)
-    , BreakInvoked(false)
-    , ContinueInvoked(false)
-    , NestedError(false)
+  cmExecutionStatus(cmMakefile& makefile)
+    : Makefile(makefile)
+    , Error("unknown error.")
   {
   }
 
-  void Clear()
-  {
-    this->ReturnInvoked = false;
-    this->BreakInvoked = false;
-    this->ContinueInvoked = false;
-    this->NestedError = false;
-  }
+  cmMakefile& GetMakefile() { return this->Makefile; }
+
+  void SetError(std::string const& e) { this->Error = e; }
+  std::string const& GetError() const { return this->Error; }
 
   void SetReturnInvoked() { this->ReturnInvoked = true; }
   bool GetReturnInvoked() const { return this->ReturnInvoked; }
@@ -40,10 +41,12 @@ public:
   bool GetNestedError() const { return this->NestedError; }
 
 private:
-  bool ReturnInvoked;
-  bool BreakInvoked;
-  bool ContinueInvoked;
-  bool NestedError;
+  cmMakefile& Makefile;
+  std::string Error;
+  bool ReturnInvoked = false;
+  bool BreakInvoked = false;
+  bool ContinueInvoked = false;
+  bool NestedError = false;
 };
 
 #endif

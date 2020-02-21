@@ -2,13 +2,14 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmLocalVisualStudio10Generator.h"
 
+#include "cm_expat.h"
+
 #include "cmGeneratorTarget.h"
 #include "cmGlobalVisualStudio10Generator.h"
 #include "cmMakefile.h"
 #include "cmVisualStudio10TargetGenerator.h"
 #include "cmXMLParser.h"
-
-#include "cm_expat.h"
+#include "cmake.h"
 
 class cmVS10XMLParser : public cmXMLParser
 {
@@ -62,23 +63,48 @@ cmLocalVisualStudio10Generator::~cmLocalVisualStudio10Generator()
 {
 }
 
+void cmLocalVisualStudio10Generator::GenerateTargetsDepthFirst(
+  cmGeneratorTarget* target, std::vector<cmGeneratorTarget*>& remaining)
+{
+  if (target->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
+    return;
+  }
+  // Find this target in the list of remaining targets.
+  auto it = std::find(remaining.begin(), remaining.end(), target);
+  if (it == remaining.end()) {
+    // This target was already handled.
+    return;
+  }
+  // Remove this target from the list of remaining targets because
+  // we are handling it now.
+  *it = nullptr;
+  auto& deps = this->GlobalGenerator->GetTargetDirectDepends(target);
+  for (auto& d : deps) {
+    // FIXME: Revise CreateSingleVCProj so we do not have to drop `const` here.
+    auto dependee = const_cast<cmGeneratorTarget*>(&*d);
+    GenerateTargetsDepthFirst(dependee, remaining);
+    // Take the union of visited source files of custom commands
+    auto visited = GetSourcesVisited(dependee);
+    GetSourcesVisited(target).insert(visited.begin(), visited.end());
+  }
+  if (static_cast<cmGlobalVisualStudioGenerator*>(this->GlobalGenerator)
+        ->TargetIsFortranOnly(target)) {
+    this->CreateSingleVCProj(target->GetName(), target);
+  } else {
+    cmVisualStudio10TargetGenerator tg(
+      target,
+      static_cast<cmGlobalVisualStudio10Generator*>(
+        this->GetGlobalGenerator()));
+    tg.Generate();
+  }
+}
+
 void cmLocalVisualStudio10Generator::Generate()
 {
-
-  const std::vector<cmGeneratorTarget*>& tgts = this->GetGeneratorTargets();
-  for (std::vector<cmGeneratorTarget*>::const_iterator l = tgts.begin();
-       l != tgts.end(); ++l) {
-    if ((*l)->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
-      continue;
-    }
-    if (static_cast<cmGlobalVisualStudioGenerator*>(this->GlobalGenerator)
-          ->TargetIsFortranOnly(*l)) {
-      this->CreateSingleVCProj((*l)->GetName().c_str(), *l);
-    } else {
-      cmVisualStudio10TargetGenerator tg(
-        *l, static_cast<cmGlobalVisualStudio10Generator*>(
-              this->GetGlobalGenerator()));
-      tg.Generate();
+  std::vector<cmGeneratorTarget*> remaining = this->GetGeneratorTargets();
+  for (auto& t : remaining) {
+    if (t) {
+      GenerateTargetsDepthFirst(t, remaining);
     }
   }
   this->WriteStampFiles();
@@ -95,8 +121,7 @@ void cmLocalVisualStudio10Generator::ReadAndStoreExternalGUID(
     return;
   }
 
-  std::string guidStoreName = name;
-  guidStoreName += "_GUID_CMAKE";
+  std::string guidStoreName = cmStrCat(name, "_GUID_CMAKE");
   // save the GUID in the cache
   this->GlobalGenerator->GetCMakeInstance()->AddCacheEntry(
     guidStoreName.c_str(), parser.GUID.c_str(), "Stored GUID",

@@ -10,17 +10,19 @@
 
 class cmCLocaleEnvironmentScope
 {
-  CM_DISABLE_COPY(cmCLocaleEnvironmentScope)
-
 public:
   cmCLocaleEnvironmentScope();
   ~cmCLocaleEnvironmentScope();
+
+  cmCLocaleEnvironmentScope(cmCLocaleEnvironmentScope const&) = delete;
+  cmCLocaleEnvironmentScope& operator=(cmCLocaleEnvironmentScope const&) =
+    delete;
 
 private:
   std::string GetEnv(std::string const& key);
   void SetEnv(std::string const& key, std::string const& value);
 
-  typedef std::map<std::string, std::string> backup_map_t;
+  using backup_map_t = std::map<std::string, std::string>;
   backup_map_t EnvironmentBackup;
 };
 

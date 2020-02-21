@@ -3,18 +3,19 @@
 #include "cmInstallExportGenerator.h"
 
 #include <algorithm>
+#include <map>
 #include <sstream>
 #include <utility>
 
-#ifdef CMAKE_BUILD_WITH_CMAKE
-#include "cmExportInstallAndroidMKGenerator.h"
+#ifndef CMAKE_BOOTSTRAP
+#  include "cmExportInstallAndroidMKGenerator.h"
 #endif
 #include "cmExportInstallFileGenerator.h"
 #include "cmExportSet.h"
 #include "cmInstallType.h"
 #include "cmLocalGenerator.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
-#include "cmake.h"
 
 cmInstallExportGenerator::cmInstallExportGenerator(
   cmExportSet* exportSet, const char* destination,
@@ -31,7 +32,7 @@ cmInstallExportGenerator::cmInstallExportGenerator(
   , LocalGenerator(nullptr)
 {
   if (android) {
-#ifdef CMAKE_BUILD_WITH_CMAKE
+#ifndef CMAKE_BOOTSTRAP
     this->EFGen = new cmExportInstallAndroidMKGenerator(this);
 #endif
   } else {
@@ -45,19 +46,19 @@ cmInstallExportGenerator::~cmInstallExportGenerator()
   delete this->EFGen;
 }
 
-void cmInstallExportGenerator::Compute(cmLocalGenerator* lg)
+bool cmInstallExportGenerator::Compute(cmLocalGenerator* lg)
 {
   this->LocalGenerator = lg;
   this->ExportSet->Compute(lg);
+  return true;
 }
 
 void cmInstallExportGenerator::ComputeTempDir()
 {
   // Choose a temporary directory in which to generate the import
   // files to be installed.
-  this->TempDir = this->LocalGenerator->GetCurrentBinaryDirectory();
-  this->TempDir += cmake::GetCMakeFilesDirectory();
-  this->TempDir += "/Export";
+  this->TempDir = cmStrCat(this->LocalGenerator->GetCurrentBinaryDirectory(),
+                           "/CMakeFiles/Export");
   if (this->Destination.empty()) {
     return;
   }
@@ -122,22 +123,20 @@ size_t cmInstallExportGenerator::GetMaxConfigLength() const
 void cmInstallExportGenerator::GenerateScript(std::ostream& os)
 {
   // Skip empty sets.
-  if (ExportSet->GetTargetExports()->empty()) {
+  if (ExportSet->GetTargetExports().empty()) {
     std::ostringstream e;
     e << "INSTALL(EXPORT) given unknown export \"" << ExportSet->GetName()
       << "\"";
-    cmSystemTools::Error(e.str().c_str());
+    cmSystemTools::Error(e.str());
     return;
   }
 
   // Create the temporary directory in which to store the files.
   this->ComputeTempDir();
-  cmSystemTools::MakeDirectory(this->TempDir.c_str());
+  cmSystemTools::MakeDirectory(this->TempDir);
 
   // Construct a temporary location for the file.
-  this->MainImportFile = this->TempDir;
-  this->MainImportFile += "/";
-  this->MainImportFile += this->FileName;
+  this->MainImportFile = cmStrCat(this->TempDir, '/', this->FileName);
 
   // Generate the import file for this export set.
   this->EFGen->SetExportFile(this->MainImportFile.c_str());
@@ -185,11 +184,10 @@ void cmInstallExportGenerator::GenerateScriptActions(std::ostream& os,
                                                      Indent indent)
 {
   // Remove old per-configuration export files if the main changes.
-  std::string installedDir = "$ENV{DESTDIR}";
-  installedDir += this->ConvertToAbsoluteDestination(this->Destination);
-  installedDir += "/";
-  std::string installedFile = installedDir;
-  installedFile += this->FileName;
+  std::string installedDir =
+    cmStrCat("$ENV{DESTDIR}",
+             this->ConvertToAbsoluteDestination(this->Destination), '/');
+  std::string installedFile = cmStrCat(installedDir, this->FileName);
   os << indent << "if(EXISTS \"" << installedFile << "\")\n";
   Indent indentN = indent.Next();
   Indent indentNN = indentN.Next();
@@ -202,7 +200,7 @@ void cmInstallExportGenerator::GenerateScriptActions(std::ostream& os,
   os << indentNN << "file(GLOB OLD_CONFIG_FILES \"" << installedDir
      << this->EFGen->GetConfigImportFileGlob() << "\")\n";
   os << indentNN << "if(OLD_CONFIG_FILES)\n";
-  os << indentNNN << "message(STATUS \"Old export file \\\"" << installedFile
+  os << indentNNN << R"(message(STATUS "Old export file \")" << installedFile
      << "\\\" will be replaced.  Removing files [${OLD_CONFIG_FILES}].\")\n";
   os << indentNNN << "file(REMOVE ${OLD_CONFIG_FILES})\n";
   os << indentNN << "endif()\n";
@@ -216,4 +214,9 @@ void cmInstallExportGenerator::GenerateScriptActions(std::ostream& os,
   this->AddInstallRule(os, this->Destination, cmInstallType_FILES, files,
                        false, this->FilePermissions.c_str(), nullptr, nullptr,
                        nullptr, indent);
+}
+
+std::string cmInstallExportGenerator::GetDestinationFile() const
+{
+  return this->Destination + '/' + this->FileName;
 }

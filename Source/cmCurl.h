@@ -5,9 +5,12 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cm_curl.h"
 #include <string>
 
+#include "cm_curl.h"
+
 std::string cmCurlSetCAInfo(::CURL* curl, const char* cafile = nullptr);
+std::string cmCurlSetNETRCOption(::CURL* curl, const std::string& netrc_level,
+                                 const std::string& netrc_file);
 
 #endif

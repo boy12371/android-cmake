@@ -8,36 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "cmCommand.h"
-
 class cmExecutionStatus;
 
-/** \class cmSourceGroupCommand
- * \brief Adds a cmSourceGroup to the cmMakefile.
- *
- * cmSourceGroupCommand is used to define cmSourceGroups which split up
- * source files in to named, organized groups in the generated makefiles.
- */
-class cmSourceGroupCommand : public cmCommand
-{
-public:
-  /**
-   * This is a virtual constructor for the command.
-   */
-  cmCommand* Clone() override { return new cmSourceGroupCommand; }
-
-  /**
-   * This is called when the command is first encountered in
-   * the CMakeLists.txt file.
-   */
-  bool InitialPass(std::vector<std::string> const& args,
-                   cmExecutionStatus& status) override;
-
-private:
-  bool processTree(const std::vector<std::string>& args,
-                   std::string& errorMsg);
-  bool checkTreeArgumentsPreconditions(const std::vector<std::string>& args,
-                                       std::string& errorMsg) const;
-};
+bool cmSourceGroupCommand(std::vector<std::string> const& args,
+                          cmExecutionStatus& status);
 
 #endif

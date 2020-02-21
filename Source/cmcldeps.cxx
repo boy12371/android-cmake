@@ -18,12 +18,14 @@
 // /showIncludes is equivalent to -MD, not -MMD, that is, system headers are
 // included.
 
-#include "cmSystemTools.h"
-#include "cmsys/Encoding.hxx"
-
 #include <algorithm>
 #include <sstream>
+
 #include <windows.h>
+
+#include "cmsys/Encoding.hxx"
+
+#include "cmSystemTools.h"
 
 // We don't want any wildcard expansion.
 // See http://msdn.microsoft.com/en-us/library/zay8tzh6(v=vs.85).aspx
@@ -221,7 +223,7 @@ static int process(const std::string& srcfilename, const std::string& dfile,
   while (std::getline(ss, line)) {
     if (startsWith(line, prefix)) {
       std::string inc = trimLeadingSpace(line.substr(prefix.size()).c_str());
-      if (inc[inc.size() - 1] == '\r') // blech, stupid \r\n
+      if (inc.back() == '\r') // blech, stupid \r\n
         inc = inc.substr(0, inc.size() - 1);
       includes.push_back(inc);
     } else {
@@ -276,7 +278,7 @@ int main()
 
     std::string clrest = rest;
     // rc: /fo x.dir\x.rc.res  ->  cl: /out:x.dir\x.rc.res.dep.obj
-    clrest = replace(clrest, "/fo", "/out:");
+    clrest = replace(clrest, "/fo ", "/out:");
     clrest = replace(clrest, objfile, objfile + ".dep.obj ");
 
     cl = "\"" + cl + "\" /P /DRC_INVOKED /TC ";

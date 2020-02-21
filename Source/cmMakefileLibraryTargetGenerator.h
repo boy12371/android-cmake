@@ -5,9 +5,9 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmMakefileTargetGenerator.h"
-
 #include <string>
+
+#include "cmMakefileTargetGenerator.h"
 
 class cmGeneratorTarget;
 
@@ -27,8 +27,7 @@ protected:
   void WriteSharedLibraryRules(bool relink);
   void WriteModuleLibraryRules(bool relink);
 
-  void WriteDeviceLibraryRules(const std::string& linkRule,
-                               const std::string& extraFlags, bool relink);
+  void WriteDeviceLibraryRules(const std::string& linkRule, bool relink);
   void WriteLibraryRules(const std::string& linkRule,
                          const std::string& extraFlags, bool relink);
   // MacOSX Framework support methods

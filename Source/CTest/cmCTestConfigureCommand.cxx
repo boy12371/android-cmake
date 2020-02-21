@@ -2,30 +2,32 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCTestConfigureCommand.h"
 
+#include <cstring>
+#include <sstream>
+#include <vector>
+
+#include "cm_static_string_view.hxx"
+
 #include "cmCTest.h"
-#include "cmCTestGenericHandler.h"
+#include "cmCTestConfigureHandler.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmake.h"
 
-#include <sstream>
-#include <string.h>
-#include <vector>
-
-cmCTestConfigureCommand::cmCTestConfigureCommand()
+void cmCTestConfigureCommand::BindArguments()
 {
-  this->Arguments[ctc_OPTIONS] = "OPTIONS";
-  this->Arguments[ctc_LAST] = nullptr;
-  this->Last = ctc_LAST;
+  this->cmCTestHandlerCommand::BindArguments();
+  this->Bind("OPTIONS"_s, this->Options);
 }
 
 cmCTestGenericHandler* cmCTestConfigureCommand::InitializeHandler()
 {
   std::vector<std::string> options;
 
-  if (this->Values[ctc_OPTIONS]) {
-    cmSystemTools::ExpandListArgument(this->Values[ctc_OPTIONS], options);
+  if (!this->Options.empty()) {
+    cmExpandList(this->Options, options);
   }
 
   if (this->CTest->GetCTestConfiguration("BuildDirectory").empty()) {
@@ -57,7 +59,7 @@ cmCTestGenericHandler* cmCTestConfigureCommand::InitializeHandler()
       }
 
       const std::string cmakelists_file = source_dir + "/CMakeLists.txt";
-      if (!cmSystemTools::FileExists(cmakelists_file.c_str())) {
+      if (!cmSystemTools::FileExists(cmakelists_file)) {
         std::ostringstream e;
         e << "CMakeLists.txt file does not exist [" << cmakelists_file << "]";
         this->SetError(e.str());
@@ -75,9 +77,8 @@ cmCTestGenericHandler* cmCTestConfigureCommand::InitializeHandler()
         delete gg;
       }
 
-      std::string cmakeConfigureCommand = "\"";
-      cmakeConfigureCommand += cmSystemTools::GetCMakeCommand();
-      cmakeConfigureCommand += "\"";
+      std::string cmakeConfigureCommand =
+        cmStrCat('"', cmSystemTools::GetCMakeCommand(), '"');
 
       for (std::string const& option : options) {
         cmakeConfigureCommand += " \"";
@@ -142,13 +143,8 @@ cmCTestGenericHandler* cmCTestConfigureCommand::InitializeHandler()
                                        labelsForSubprojects, this->Quiet);
   }
 
-  cmCTestGenericHandler* handler =
-    this->CTest->GetInitializedHandler("configure");
-  if (!handler) {
-    this->SetError(
-      "internal CTest error. Cannot instantiate configure handler");
-    return nullptr;
-  }
+  cmCTestConfigureHandler* handler = this->CTest->GetConfigureHandler();
+  handler->Initialize();
   handler->SetQuiet(this->Quiet);
   return handler;
 }

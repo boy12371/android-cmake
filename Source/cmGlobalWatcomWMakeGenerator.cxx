@@ -2,7 +2,10 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmGlobalWatcomWMakeGenerator.h"
 
+#include <ostream>
+
 #include "cmDocumentationEntry.h"
+#include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
 #include "cmState.h"
 #include "cmake.h"
@@ -46,4 +49,33 @@ void cmGlobalWatcomWMakeGenerator::GetDocumentation(
 {
   entry.Name = cmGlobalWatcomWMakeGenerator::GetActualName();
   entry.Brief = "Generates Watcom WMake makefiles.";
+}
+
+std::vector<cmGlobalGenerator::GeneratedMakeCommand>
+cmGlobalWatcomWMakeGenerator::GenerateBuildCommand(
+  const std::string& makeProgram, const std::string& projectName,
+  const std::string& projectDir, std::vector<std::string> const& targetNames,
+  const std::string& config, bool fast, int /*jobs*/, bool verbose,
+  std::vector<std::string> const& makeOptions)
+{
+  return this->cmGlobalUnixMakefileGenerator3::GenerateBuildCommand(
+    makeProgram, projectName, projectDir, targetNames, config, fast,
+    cmake::NO_BUILD_PARALLEL_LEVEL, verbose, makeOptions);
+}
+
+void cmGlobalWatcomWMakeGenerator::PrintBuildCommandAdvice(std::ostream& os,
+                                                           int jobs) const
+{
+  if (jobs != cmake::NO_BUILD_PARALLEL_LEVEL) {
+    // wmake does not support parallel build level
+
+    /* clang-format off */
+    os <<
+      "Warning: Watcom's WMake does not support parallel builds. "
+      "Ignoring parallel build command line option.\n";
+    /* clang-format on */
+  }
+
+  this->cmGlobalUnixMakefileGenerator3::PrintBuildCommandAdvice(
+    os, cmake::NO_BUILD_PARALLEL_LEVEL);
 }

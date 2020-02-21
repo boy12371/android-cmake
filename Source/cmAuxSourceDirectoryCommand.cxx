@@ -2,40 +2,39 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmAuxSourceDirectoryCommand.h"
 
-#include "cmsys/Directory.hxx"
 #include <algorithm>
-#include <stddef.h>
+#include <cstddef>
+#include <utility>
 
-#include "cmAlgorithms.h"
+#include "cmsys/Directory.hxx"
+
+#include "cmExecutionStatus.h"
 #include "cmMakefile.h"
 #include "cmSourceFile.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 #include "cmake.h"
 
-class cmExecutionStatus;
-
-// cmAuxSourceDirectoryCommand
-bool cmAuxSourceDirectoryCommand::InitialPass(
-  std::vector<std::string> const& args, cmExecutionStatus&)
+bool cmAuxSourceDirectoryCommand(std::vector<std::string> const& args,
+                                 cmExecutionStatus& status)
 {
   if (args.size() != 2) {
-    this->SetError("called with incorrect number of arguments");
+    status.SetError("called with incorrect number of arguments");
     return false;
   }
 
+  cmMakefile& mf = status.GetMakefile();
   std::string sourceListValue;
   std::string const& templateDirectory = args[0];
   std::string tdir;
-  if (!cmSystemTools::FileIsFullPath(templateDirectory.c_str())) {
-    tdir = this->Makefile->GetCurrentSourceDirectory();
-    tdir += "/";
-    tdir += templateDirectory;
+  if (!cmSystemTools::FileIsFullPath(templateDirectory)) {
+    tdir = cmStrCat(mf.GetCurrentSourceDirectory(), '/', templateDirectory);
   } else {
     tdir = templateDirectory;
   }
 
   // was the list already populated
-  const char* def = this->Makefile->GetDefinition(args[1]);
+  const char* def = mf.GetDefinition(args[1]);
   if (def) {
     sourceListValue = def;
   }
@@ -54,18 +53,14 @@ bool cmAuxSourceDirectoryCommand::InitialPass(
         std::string ext = file.substr(dotpos + 1);
         std::string base = file.substr(0, dotpos);
         // Process only source files
-        std::vector<std::string> const& srcExts =
-          this->Makefile->GetCMakeInstance()->GetSourceExtensions();
-        if (!base.empty() &&
-            std::find(srcExts.begin(), srcExts.end(), ext) != srcExts.end()) {
-          std::string fullname = templateDirectory;
-          fullname += "/";
-          fullname += file;
+        auto cm = mf.GetCMakeInstance();
+        if (!base.empty() && cm->IsSourceExtension(ext)) {
+          std::string fullname = cmStrCat(templateDirectory, '/', file);
           // add the file as a class file so
           // depends can be done
-          cmSourceFile* sf = this->Makefile->GetOrCreateSource(fullname);
+          cmSourceFile* sf = mf.GetOrCreateSource(fullname);
           sf->SetProperty("ABSTRACT", "0");
-          files.push_back(fullname);
+          files.push_back(std::move(fullname));
         }
       }
     }
@@ -75,6 +70,6 @@ bool cmAuxSourceDirectoryCommand::InitialPass(
     sourceListValue += ";";
   }
   sourceListValue += cmJoin(files, ";");
-  this->Makefile->AddDefinition(args[1], sourceListValue.c_str());
+  mf.AddDefinition(args[1], sourceListValue);
   return true;
 }

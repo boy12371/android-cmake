@@ -2,176 +2,174 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmExportCommand.h"
 
-#include "cmsys/RegularExpression.hxx"
 #include <map>
 #include <sstream>
+#include <utility>
 
+#include "cmsys/RegularExpression.hxx"
+
+#include "cm_static_string_view.hxx"
+
+#include "cmAlgorithms.h"
+#include "cmArgumentParser.h"
+#include "cmExecutionStatus.h"
 #include "cmExportBuildAndroidMKGenerator.h"
 #include "cmExportBuildFileGenerator.h"
-#include "cmExportSetMap.h"
+#include "cmExportSet.h"
 #include "cmGeneratedFileStream.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
+#include "cmPolicies.h"
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
-#include "cmake.h"
-
-class cmExecutionStatus;
 
 #if defined(__HAIKU__)
-#include <FindDirectory.h>
-#include <StorageDefs.h>
+#  include <FindDirectory.h>
+#  include <StorageDefs.h>
 #endif
 
-cmExportCommand::cmExportCommand()
-  : cmCommand()
-  , ArgumentGroup()
-  , Targets(&Helper, "TARGETS")
-  , Append(&Helper, "APPEND", &ArgumentGroup)
-  , ExportSetName(&Helper, "EXPORT", &ArgumentGroup)
-  , Namespace(&Helper, "NAMESPACE", &ArgumentGroup)
-  , Filename(&Helper, "FILE", &ArgumentGroup)
-  , ExportOld(&Helper, "EXPORT_LINK_INTERFACE_LIBRARIES", &ArgumentGroup)
-  , AndroidMKFile(&Helper, "ANDROID_MK")
-{
-  this->ExportSet = nullptr;
-}
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#  include <windows.h>
+#endif
 
-// cmExportCommand
-bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
-                                  cmExecutionStatus&)
+static bool HandlePackage(std::vector<std::string> const& args,
+                          cmExecutionStatus& status);
+
+static void StorePackageRegistry(cmMakefile& mf, std::string const& package,
+                                 const char* content, const char* hash);
+
+bool cmExportCommand(std::vector<std::string> const& args,
+                     cmExecutionStatus& status)
 {
   if (args.size() < 2) {
-    this->SetError("called with too few arguments");
+    status.SetError("called with too few arguments");
     return false;
   }
 
   if (args[0] == "PACKAGE") {
-    return this->HandlePackage(args);
+    return HandlePackage(args, status);
   }
+
+  struct Arguments
+  {
+    std::string ExportSetName;
+    std::vector<std::string> Targets;
+    std::string Namespace;
+    std::string Filename;
+    std::string AndroidMKFile;
+    bool Append = false;
+    bool ExportOld = false;
+  };
+
+  auto parser = cmArgumentParser<Arguments>{}
+                  .Bind("NAMESPACE"_s, &Arguments::Namespace)
+                  .Bind("FILE"_s, &Arguments::Filename);
+
   if (args[0] == "EXPORT") {
-    this->ExportSetName.Follows(nullptr);
-    this->ArgumentGroup.Follows(&this->ExportSetName);
+    parser.Bind("EXPORT"_s, &Arguments::ExportSetName);
   } else {
-    this->Targets.Follows(nullptr);
-    this->ArgumentGroup.Follows(&this->Targets);
+    parser.Bind("TARGETS"_s, &Arguments::Targets);
+    parser.Bind("ANDROID_MK"_s, &Arguments::AndroidMKFile);
+    parser.Bind("APPEND"_s, &Arguments::Append);
+    parser.Bind("EXPORT_LINK_INTERFACE_LIBRARIES"_s, &Arguments::ExportOld);
   }
 
   std::vector<std::string> unknownArgs;
-  this->Helper.Parse(&args, &unknownArgs);
+  std::vector<std::string> keywordsMissingValue;
+  Arguments const arguments =
+    parser.Parse(args, &unknownArgs, &keywordsMissingValue);
 
   if (!unknownArgs.empty()) {
-    this->SetError("Unknown arguments.");
+    status.SetError("Unknown argument: \"" + unknownArgs.front() + "\".");
     return false;
   }
 
   std::string fname;
   bool android = false;
-  if (this->AndroidMKFile.WasFound()) {
-    fname = this->AndroidMKFile.GetString();
+  if (!arguments.AndroidMKFile.empty()) {
+    fname = arguments.AndroidMKFile;
     android = true;
   }
-  if (!this->Filename.WasFound() && fname.empty()) {
+  if (arguments.Filename.empty() && fname.empty()) {
     if (args[0] != "EXPORT") {
-      this->SetError("FILE <filename> option missing.");
+      status.SetError("FILE <filename> option missing.");
       return false;
     }
-    fname = this->ExportSetName.GetString() + ".cmake";
+    fname = arguments.ExportSetName + ".cmake";
   } else if (fname.empty()) {
     // Make sure the file has a .cmake extension.
-    if (cmSystemTools::GetFilenameLastExtension(this->Filename.GetCString()) !=
+    if (cmSystemTools::GetFilenameLastExtension(arguments.Filename) !=
         ".cmake") {
       std::ostringstream e;
-      e << "FILE option given filename \"" << this->Filename.GetString()
+      e << "FILE option given filename \"" << arguments.Filename
         << "\" which does not have an extension of \".cmake\".\n";
-      this->SetError(e.str());
+      status.SetError(e.str());
       return false;
     }
-    fname = this->Filename.GetString();
+    fname = arguments.Filename;
   }
 
+  cmMakefile& mf = status.GetMakefile();
+
   // Get the file to write.
-  if (cmSystemTools::FileIsFullPath(fname.c_str())) {
-    if (!this->Makefile->CanIWriteThisFile(fname.c_str())) {
+  if (cmSystemTools::FileIsFullPath(fname)) {
+    if (!mf.CanIWriteThisFile(fname)) {
       std::ostringstream e;
       e << "FILE option given filename \"" << fname
         << "\" which is in the source tree.\n";
-      this->SetError(e.str());
+      status.SetError(e.str());
       return false;
     }
   } else {
     // Interpret relative paths with respect to the current build dir.
-    std::string dir = this->Makefile->GetCurrentBinaryDirectory();
+    std::string const& dir = mf.GetCurrentBinaryDirectory();
     fname = dir + "/" + fname;
   }
 
   std::vector<std::string> targets;
 
-  cmGlobalGenerator* gg = this->Makefile->GetGlobalGenerator();
+  cmGlobalGenerator* gg = mf.GetGlobalGenerator();
 
+  cmExportSet* exportSet = nullptr;
   if (args[0] == "EXPORT") {
-    if (this->Append.IsEnabled()) {
-      std::ostringstream e;
-      e << "EXPORT signature does not recognise the APPEND option.";
-      this->SetError(e.str());
-      return false;
-    }
-
-    if (this->ExportOld.IsEnabled()) {
-      std::ostringstream e;
-      e << "EXPORT signature does not recognise the "
-           "EXPORT_LINK_INTERFACE_LIBRARIES option.";
-      this->SetError(e.str());
-      return false;
-    }
-
     cmExportSetMap& setMap = gg->GetExportSets();
-    std::string setName = this->ExportSetName.GetString();
-    if (setMap.find(setName) == setMap.end()) {
+    auto const it = setMap.find(arguments.ExportSetName);
+    if (it == setMap.end()) {
       std::ostringstream e;
-      e << "Export set \"" << setName << "\" not found.";
-      this->SetError(e.str());
+      e << "Export set \"" << arguments.ExportSetName << "\" not found.";
+      status.SetError(e.str());
       return false;
     }
-    this->ExportSet = setMap[setName];
-  } else if (this->Targets.WasFound()) {
-    for (std::string const& currentTarget : this->Targets.GetVector()) {
-      if (this->Makefile->IsAlias(currentTarget)) {
+    exportSet = &it->second;
+  } else if (!arguments.Targets.empty() ||
+             cmContains(keywordsMissingValue, "TARGETS")) {
+    for (std::string const& currentTarget : arguments.Targets) {
+      if (mf.IsAlias(currentTarget)) {
         std::ostringstream e;
         e << "given ALIAS target \"" << currentTarget
           << "\" which may not be exported.";
-        this->SetError(e.str());
+        status.SetError(e.str());
         return false;
       }
 
       if (cmTarget* target = gg->FindTarget(currentTarget)) {
-        if (target->GetType() == cmStateEnums::OBJECT_LIBRARY) {
-          std::string reason;
-          if (!this->Makefile->GetGlobalGenerator()
-                 ->HasKnownObjectFileLocation(&reason)) {
-            std::ostringstream e;
-            e << "given OBJECT library \"" << currentTarget
-              << "\" which may not be exported" << reason << ".";
-            this->SetError(e.str());
-            return false;
-          }
-        }
         if (target->GetType() == cmStateEnums::UTILITY) {
-          this->SetError("given custom target \"" + currentTarget +
-                         "\" which may not be exported.");
+          status.SetError("given custom target \"" + currentTarget +
+                          "\" which may not be exported.");
           return false;
         }
       } else {
         std::ostringstream e;
         e << "given target \"" << currentTarget
           << "\" which is not built by this project.";
-        this->SetError(e.str());
+        status.SetError(e.str());
         return false;
       }
       targets.push_back(currentTarget);
     }
-    if (this->Append.IsEnabled()) {
+    if (arguments.Append) {
       if (cmExportBuildFileGenerator* ebfg =
             gg->GetExportedTargetsFile(fname)) {
         ebfg->AppendTargets(targets);
@@ -179,7 +177,7 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
       }
     }
   } else {
-    this->SetError("EXPORT or TARGETS specifier missing.");
+    status.SetError("EXPORT or TARGETS specifier missing.");
     return false;
   }
 
@@ -191,26 +189,26 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
     ebfg = new cmExportBuildFileGenerator;
   }
   ebfg->SetExportFile(fname.c_str());
-  ebfg->SetNamespace(this->Namespace.GetCString());
-  ebfg->SetAppendMode(this->Append.IsEnabled());
-  if (this->ExportSet) {
-    ebfg->SetExportSet(this->ExportSet);
+  ebfg->SetNamespace(arguments.Namespace);
+  ebfg->SetAppendMode(arguments.Append);
+  if (exportSet != nullptr) {
+    ebfg->SetExportSet(exportSet);
   } else {
     ebfg->SetTargets(targets);
   }
-  this->Makefile->AddExportBuildFileGenerator(ebfg);
-  ebfg->SetExportOld(this->ExportOld.IsEnabled());
+  mf.AddExportBuildFileGenerator(ebfg);
+  ebfg->SetExportOld(arguments.ExportOld);
 
   // Compute the set of configurations exported.
   std::vector<std::string> configurationTypes;
-  this->Makefile->GetConfigurations(configurationTypes);
+  mf.GetConfigurations(configurationTypes);
   if (configurationTypes.empty()) {
-    configurationTypes.push_back("");
+    configurationTypes.emplace_back();
   }
   for (std::string const& ct : configurationTypes) {
     ebfg->AddConfiguration(ct);
   }
-  if (this->ExportSet) {
+  if (exportSet != nullptr) {
     gg->AddBuildExportExportSet(ebfg);
   } else {
     gg->AddBuildExportSet(ebfg);
@@ -219,7 +217,8 @@ bool cmExportCommand::InitialPass(std::vector<std::string> const& args,
   return true;
 }
 
-bool cmExportCommand::HandlePackage(std::vector<std::string> const& args)
+static bool HandlePackage(std::vector<std::string> const& args,
+                          cmExecutionStatus& status)
 {
   // Parse PACKAGE mode arguments.
   enum Doing
@@ -236,51 +235,61 @@ bool cmExportCommand::HandlePackage(std::vector<std::string> const& args)
     } else {
       std::ostringstream e;
       e << "PACKAGE given unknown argument: " << args[i];
-      this->SetError(e.str());
+      status.SetError(e.str());
       return false;
     }
   }
 
   // Verify the package name.
   if (package.empty()) {
-    this->SetError("PACKAGE must be given a package name.");
+    status.SetError("PACKAGE must be given a package name.");
     return false;
   }
   const char* packageExpr = "^[A-Za-z0-9_.-]+$";
   cmsys::RegularExpression packageRegex(packageExpr);
-  if (!packageRegex.find(package.c_str())) {
+  if (!packageRegex.find(package)) {
     std::ostringstream e;
     e << "PACKAGE given invalid package name \"" << package << "\".  "
       << "Package names must match \"" << packageExpr << "\".";
-    this->SetError(e.str());
+    status.SetError(e.str());
     return false;
   }
 
-  // If the CMAKE_EXPORT_NO_PACKAGE_REGISTRY variable is set the command
-  // export(PACKAGE) does nothing.
-  if (this->Makefile->IsOn("CMAKE_EXPORT_NO_PACKAGE_REGISTRY")) {
-    return true;
+  cmMakefile& mf = status.GetMakefile();
+
+  // CMP0090 decides both the default and what variable changes it.
+  switch (mf.GetPolicyStatus(cmPolicies::CMP0090)) {
+    case cmPolicies::WARN:
+    case cmPolicies::OLD:
+      // Default is to export, but can be disabled.
+      if (mf.IsOn("CMAKE_EXPORT_NO_PACKAGE_REGISTRY")) {
+        return true;
+      }
+      break;
+    case cmPolicies::REQUIRED_IF_USED:
+    case cmPolicies::REQUIRED_ALWAYS:
+    case cmPolicies::NEW:
+      // Default is to not export, but can be enabled.
+      if (!mf.IsOn("CMAKE_EXPORT_PACKAGE_REGISTRY")) {
+        return true;
+      }
+      break;
   }
 
   // We store the current build directory in the registry as a value
   // named by a hash of its own content.  This is deterministic and is
   // unique with high probability.
-  const char* outDir = this->Makefile->GetCurrentBinaryDirectory();
+  const std::string& outDir = mf.GetCurrentBinaryDirectory();
   std::string hash = cmSystemTools::ComputeStringMD5(outDir);
-#if defined(_WIN32) && !defined(__CYGWIN__)
-  this->StorePackageRegistryWin(package, outDir, hash.c_str());
-#else
-  this->StorePackageRegistryDir(package, outDir, hash.c_str());
-#endif
+  StorePackageRegistry(mf, package, outDir.c_str(), hash.c_str());
 
   return true;
 }
 
 #if defined(_WIN32) && !defined(__CYGWIN__)
-#include <windows.h>
 
-void cmExportCommand::ReportRegistryError(std::string const& msg,
-                                          std::string const& key, long err)
+static void ReportRegistryError(cmMakefile& mf, std::string const& msg,
+                                std::string const& key, long err)
 {
   std::ostringstream e;
   e << msg << "\n"
@@ -292,21 +301,19 @@ void cmExportCommand::ReportRegistryError(std::string const& msg,
     e << "Windows reported:\n"
       << "  " << cmsys::Encoding::ToNarrow(winmsg);
   }
-  this->Makefile->IssueMessage(cmake::WARNING, e.str());
+  mf.IssueMessage(MessageType::WARNING, e.str());
 }
 
-void cmExportCommand::StorePackageRegistryWin(std::string const& package,
-                                              const char* content,
-                                              const char* hash)
+static void StorePackageRegistry(cmMakefile& mf, std::string const& package,
+                                 const char* content, const char* hash)
 {
-  std::string key = "Software\\Kitware\\CMake\\Packages\\";
-  key += package;
+  std::string key = cmStrCat("Software\\Kitware\\CMake\\Packages\\", package);
   HKEY hKey;
   LONG err =
     RegCreateKeyExW(HKEY_CURRENT_USER, cmsys::Encoding::ToWide(key).c_str(), 0,
                     0, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, 0, &hKey, 0);
   if (err != ERROR_SUCCESS) {
-    this->ReportRegistryError("Cannot create/open registry key", key, err);
+    ReportRegistryError(mf, "Cannot create/open registry key", key, err);
     return;
   }
 
@@ -319,25 +326,22 @@ void cmExportCommand::StorePackageRegistryWin(std::string const& package,
   if (err != ERROR_SUCCESS) {
     std::ostringstream msg;
     msg << "Cannot set registry value \"" << hash << "\" under key";
-    this->ReportRegistryError(msg.str(), key, err);
+    ReportRegistryError(mf, msg.str(), key, err);
     return;
   }
 }
 #else
-void cmExportCommand::StorePackageRegistryDir(std::string const& package,
-                                              const char* content,
-                                              const char* hash)
+static void StorePackageRegistry(cmMakefile& mf, std::string const& package,
+                                 const char* content, const char* hash)
 {
-#if defined(__HAIKU__)
+#  if defined(__HAIKU__)
   char dir[B_PATH_NAME_LENGTH];
   if (find_directory(B_USER_SETTINGS_DIRECTORY, -1, false, dir, sizeof(dir)) !=
       B_OK) {
     return;
   }
-  std::string fname = dir;
-  fname += "/cmake/packages/";
-  fname += package;
-#else
+  std::string fname = cmStrCat(dir, "/cmake/packages/", package);
+#  else
   std::string fname;
   if (!cmSystemTools::GetEnv("HOME", fname)) {
     return;
@@ -345,12 +349,12 @@ void cmExportCommand::StorePackageRegistryDir(std::string const& package,
   cmSystemTools::ConvertToUnixSlashes(fname);
   fname += "/.cmake/packages/";
   fname += package;
-#endif
-  cmSystemTools::MakeDirectory(fname.c_str());
+#  endif
+  cmSystemTools::MakeDirectory(fname);
   fname += "/";
   fname += hash;
-  if (!cmSystemTools::FileExists(fname.c_str())) {
-    cmGeneratedFileStream entry(fname.c_str(), true);
+  if (!cmSystemTools::FileExists(fname)) {
+    cmGeneratedFileStream entry(fname, true);
     if (entry) {
       entry << content << "\n";
     } else {
@@ -360,7 +364,7 @@ void cmExportCommand::StorePackageRegistryDir(std::string const& package,
         << "  " << fname << "\n"
         << cmSystemTools::GetLastSystemError() << "\n";
       /* clang-format on */
-      this->Makefile->IssueMessage(cmake::WARNING, e.str());
+      mf.IssueMessage(MessageType::WARNING, e.str());
     }
   }
 }

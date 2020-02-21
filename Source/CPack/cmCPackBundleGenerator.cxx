@@ -6,15 +6,12 @@
 #include <vector>
 
 #include "cmCPackLog.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
-cmCPackBundleGenerator::cmCPackBundleGenerator()
-{
-}
+cmCPackBundleGenerator::cmCPackBundleGenerator() = default;
 
-cmCPackBundleGenerator::~cmCPackBundleGenerator()
-{
-}
+cmCPackBundleGenerator::~cmCPackBundleGenerator() = default;
 
 int cmCPackBundleGenerator::InitializeInternal()
 {
@@ -32,8 +29,8 @@ int cmCPackBundleGenerator::InitializeInternal()
       "codesign", std::vector<std::string>(), false);
 
     if (codesign_path.empty()) {
-      cmCPackLogger(cmCPackLog::LOG_ERROR, "Cannot locate codesign command"
-                      << std::endl);
+      cmCPackLogger(cmCPackLog::LOG_ERROR,
+                    "Cannot locate codesign command" << std::endl);
       return 0;
     }
     this->SetOptionIfNotSet("CPACK_COMMAND_CODESIGN", codesign_path.c_str());
@@ -44,9 +41,8 @@ int cmCPackBundleGenerator::InitializeInternal()
 
 const char* cmCPackBundleGenerator::GetPackagingInstallPrefix()
 {
-  this->InstallPrefix = "/";
-  this->InstallPrefix += this->GetOption("CPACK_BUNDLE_NAME");
-  this->InstallPrefix += ".app/Contents/Resources";
+  this->InstallPrefix = cmStrCat('/', this->GetOption("CPACK_BUNDLE_NAME"),
+                                 ".app/Contents/Resources");
 
   return this->InstallPrefix.c_str();
 }
@@ -59,8 +55,8 @@ int cmCPackBundleGenerator::ConstructBundle()
     ? this->GetOption("CPACK_BUNDLE_NAME")
     : "";
   if (cpack_bundle_name.empty()) {
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "CPACK_BUNDLE_NAME must be set."
-                    << std::endl);
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "CPACK_BUNDLE_NAME must be set." << std::endl);
 
     return 0;
   }
@@ -69,8 +65,8 @@ int cmCPackBundleGenerator::ConstructBundle()
     ? this->GetOption("CPACK_BUNDLE_PLIST")
     : "";
   if (cpack_bundle_plist.empty()) {
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "CPACK_BUNDLE_PLIST must be set."
-                    << std::endl);
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "CPACK_BUNDLE_PLIST must be set." << std::endl);
 
     return 0;
   }
@@ -79,8 +75,8 @@ int cmCPackBundleGenerator::ConstructBundle()
     ? this->GetOption("CPACK_BUNDLE_ICON")
     : "";
   if (cpack_bundle_icon.empty()) {
-    cmCPackLogger(cmCPackLog::LOG_ERROR, "CPACK_BUNDLE_ICON must be set."
-                    << std::endl);
+    cmCPackLogger(cmCPackLog::LOG_ERROR,
+                  "CPACK_BUNDLE_ICON must be set." << std::endl);
 
     return 0;
   }
@@ -93,11 +89,10 @@ int cmCPackBundleGenerator::ConstructBundle()
 
   // The staging directory contains everything that will end-up inside the
   // final disk image ...
-  std::ostringstream staging;
-  staging << toplevel;
+  std::string const staging = toplevel;
 
   std::ostringstream contents;
-  contents << staging.str() << "/" << cpack_bundle_name << ".app/"
+  contents << staging << "/" << cpack_bundle_name << ".app/"
            << "Contents";
 
   std::ostringstream application;
@@ -194,9 +189,8 @@ int cmCPackBundleGenerator::SignBundle(const std::string& src_dir)
   if (!cpack_apple_cert_app.empty()) {
     std::string output;
     std::string bundle_path;
-    bundle_path = src_dir + "/";
-    bundle_path += this->GetOption("CPACK_BUNDLE_NAME");
-    bundle_path += ".app";
+    bundle_path =
+      cmStrCat(src_dir, '/', this->GetOption("CPACK_BUNDLE_NAME"), ".app");
 
     // A list of additional files to sign, ie. frameworks and plugins.
     const std::string sign_parameter =
@@ -209,8 +203,7 @@ int cmCPackBundleGenerator::SignBundle(const std::string& src_dir)
       ? this->GetOption("CPACK_BUNDLE_APPLE_CODESIGN_FILES")
       : "";
 
-    std::vector<std::string> relFiles;
-    cmSystemTools::ExpandListArgument(sign_files, relFiles);
+    std::vector<std::string> relFiles = cmExpandedList(sign_files);
 
     // sign the files supplied by the user, ie. frameworks.
     for (auto const& file : relFiles) {
@@ -269,8 +262,8 @@ int cmCPackBundleGenerator::SignBundle(const std::string& src_dir)
       return 0;
     }
 
-    cmCPackLogger(cmCPackLog::LOG_OUTPUT, "- Application has been codesigned"
-                    << std::endl);
+    cmCPackLogger(cmCPackLog::LOG_OUTPUT,
+                  "- Application has been codesigned" << std::endl);
     cmCPackLogger(cmCPackLog::LOG_VERBOSE,
                   (this->GetOption("CPACK_BUNDLE_APPLE_ENTITLEMENTS")
                      ? "with entitlement sandboxing"

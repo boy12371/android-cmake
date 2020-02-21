@@ -5,6 +5,8 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
+#include <string>
+
 /** \class cmHexFileConverter
  * \brief Can detects Intel Hex and Motorola S-record files and convert them
  *        to binary files.
@@ -19,8 +21,9 @@ public:
     IntelHex,
     MotorolaSrec
   };
-  static FileType DetermineFileType(const char* inFileName);
-  static bool TryConvert(const char* inFileName, const char* outFileName);
+  static FileType DetermineFileType(const std::string& inFileName);
+  static bool TryConvert(const std::string& inFileName,
+                         const std::string& outFileName);
 };
 
 #endif

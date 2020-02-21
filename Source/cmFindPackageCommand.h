@@ -5,15 +5,29 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cm_kwiml.h"
+#include <cstddef>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "cmFindCommon.h"
+#include "cm_kwiml.h"
 
-class cmCommand;
+#include "cmFindCommon.h"
+#include "cmPolicies.h"
+
+// IWYU insists we should forward-declare instead of including <functional>,
+// but we cannot forward-declare reliably because some C++ standard libraries
+// put the template in an inline namespace.
+#ifdef CMAKE_IWYU_FORWARD_STD_HASH
+/* clang-format off */
+namespace std {
+  template <class T> struct hash;
+}
+/* clang-format on */
+#endif
+
 class cmExecutionStatus;
 class cmSearchPath;
 
@@ -46,19 +60,9 @@ public:
                    std::vector<std::string>::iterator end, SortOrderType order,
                    SortDirectionType dir);
 
-  cmFindPackageCommand();
+  cmFindPackageCommand(cmExecutionStatus& status);
 
-  /**
-   * This is a virtual constructor for the command.
-   */
-  cmCommand* Clone() override { return new cmFindPackageCommand; }
-
-  /**
-   * This is called when the command is first encountered in
-   * the CMakeLists.txt file.
-   */
-  bool InitialPass(std::vector<std::string> const& args,
-                   cmExecutionStatus& status) override;
+  bool InitialPass(std::vector<std::string> const& args);
 
 private:
   class PathLabel : public cmFindCommon::PathLabel
@@ -76,6 +80,9 @@ private:
     static PathLabel SystemRegistry;
   };
 
+  bool FindPackageUsingModuleMode();
+  bool FindPackageUsingConfigMode();
+
   // Add additional search path labels and groups not present in the
   // parent class
   void AppendSearchPathGroups();
@@ -86,7 +93,14 @@ private:
   bool FindModule(bool& found);
   void AddFindDefinition(const std::string& var, const char* val);
   void RestoreFindDefinitions();
-  bool HandlePackageMode();
+
+  enum /*class*/ HandlePackageModeType
+  {
+    Module,
+    Config
+  };
+  bool HandlePackageMode(HandlePackageModeType type);
+
   bool FindConfig();
   bool FindPrefixedConfig();
   bool FindFrameworkConfig();
@@ -96,7 +110,7 @@ private:
     NoPolicyScope,
     DoPolicyScope
   };
-  bool ReadListFile(const char* f, PolicyScopeRule psr);
+  bool ReadListFile(const std::string& f, PolicyScopeRule psr);
   void StoreVersionFound();
 
   void ComputePrefixes();
@@ -135,6 +149,8 @@ private:
   };
   std::map<std::string, OriginalDef> OriginalDefs;
 
+  std::map<std::string, cmPolicies::PolicyID> DeprecatedFindModules;
+
   std::string Name;
   std::string Variable;
   std::string Version;
@@ -162,6 +178,7 @@ private:
   bool UseLib32Paths;
   bool UseLib64Paths;
   bool UseLibx32Paths;
+  bool UseRealPath;
   bool PolicyScope;
   std::string LibraryArchitecture;
   std::vector<std::string> Names;
@@ -194,6 +211,27 @@ private:
     }
   };
   std::vector<ConfigFileInfo> ConsideredConfigs;
+
+  friend struct std::hash<ConfigFileInfo>;
 };
+
+namespace std {
+
+template <>
+struct hash<cmFindPackageCommand::ConfigFileInfo>
+{
+  using argument_type = cmFindPackageCommand::ConfigFileInfo;
+  using result_type = size_t;
+
+  result_type operator()(argument_type const& s) const noexcept
+  {
+    result_type const h(std::hash<std::string>{}(s.filename));
+    return h;
+  }
+};
+}
+
+bool cmFindPackage(std::vector<std::string> const& args,
+                   cmExecutionStatus& status);
 
 #endif

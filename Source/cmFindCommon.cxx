@@ -3,10 +3,14 @@
 #include "cmFindCommon.h"
 
 #include <algorithm>
-#include <string.h>
+#include <array>
+#include <cstring>
 #include <utility>
 
+#include "cmAlgorithms.h"
+#include "cmExecutionStatus.h"
 #include "cmMakefile.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
 cmFindCommon::PathGroup cmFindCommon::PathGroup::All("ALL");
@@ -21,7 +25,9 @@ cmFindCommon::PathLabel cmFindCommon::PathLabel::SystemEnvironment(
 cmFindCommon::PathLabel cmFindCommon::PathLabel::CMakeSystem("CMAKE_SYSTEM");
 cmFindCommon::PathLabel cmFindCommon::PathLabel::Guess("GUESS");
 
-cmFindCommon::cmFindCommon()
+cmFindCommon::cmFindCommon(cmExecutionStatus& status)
+  : Makefile(&status.GetMakefile())
+  , Status(status)
 {
   this->FindRootPathMode = RootPathModeBoth;
   this->NoDefaultPath = false;
@@ -48,15 +54,16 @@ cmFindCommon::cmFindCommon()
   this->InitializeSearchPathGroups();
 }
 
-cmFindCommon::~cmFindCommon()
+void cmFindCommon::SetError(std::string const& e)
 {
+  this->Status.SetError(e);
 }
 
 void cmFindCommon::InitializeSearchPathGroups()
 {
   std::vector<PathLabel>* labels;
 
-  // Define the varoius different groups of path types
+  // Define the various different groups of path types
 
   // All search paths
   labels = &this->PathGroupLabelMap[PathGroup::All];
@@ -71,7 +78,7 @@ void cmFindCommon::InitializeSearchPathGroups()
   // Define the search group order
   this->PathGroupOrder.push_back(PathGroup::All);
 
-  // Create the idividual labeld search paths
+  // Create the individual labeled search paths
   this->LabeledPaths.insert(
     std::make_pair(PathLabel::PackageRoot, cmSearchPath(this)));
   this->LabeledPaths.insert(
@@ -88,18 +95,11 @@ void cmFindCommon::InitializeSearchPathGroups()
     std::make_pair(PathLabel::Guess, cmSearchPath(this)));
 }
 
-void cmFindCommon::SelectDefaultNoPackageRootPath()
-{
-  if (!this->Makefile->IsOn("__UNDOCUMENTED_CMAKE_FIND_PACKAGE_ROOT")) {
-    this->NoPackageRootPath = true;
-  }
-}
-
 void cmFindCommon::SelectDefaultRootPathMode()
 {
   // Check the policy variable for this find command type.
-  std::string findRootPathVar = "CMAKE_FIND_ROOT_PATH_MODE_";
-  findRootPathVar += this->CMakePathName;
+  std::string findRootPathVar =
+    cmStrCat("CMAKE_FIND_ROOT_PATH_MODE_", this->CMakePathName);
   std::string rootPathMode =
     this->Makefile->GetSafeDefinition(findRootPathVar);
   if (rootPathMode == "NEVER") {
@@ -152,6 +152,26 @@ void cmFindCommon::SelectDefaultMacMode()
   }
 }
 
+void cmFindCommon::SelectDefaultSearchModes()
+{
+  const std::array<std::pair<bool&, std::string>, 5> search_paths = {
+    { { this->NoPackageRootPath, "CMAKE_FIND_USE_PACKAGE_ROOT_PATH" },
+      { this->NoCMakePath, "CMAKE_FIND_USE_CMAKE_PATH" },
+      { this->NoCMakeEnvironmentPath,
+        "CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH" },
+      { this->NoSystemEnvironmentPath,
+        "CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH" },
+      { this->NoCMakeSystemPath, "CMAKE_FIND_USE_CMAKE_SYSTEM_PATH" } }
+  };
+
+  for (auto& path : search_paths) {
+    const char* def = this->Makefile->GetDefinition(path.second);
+    if (def) {
+      path.first = !cmIsOn(def);
+    }
+  }
+}
+
 void cmFindCommon::RerootPaths(std::vector<std::string>& paths)
 {
 #if 0
@@ -182,16 +202,16 @@ void cmFindCommon::RerootPaths(std::vector<std::string>& paths)
   // Construct the list of path roots with no trailing slashes.
   std::vector<std::string> roots;
   if (rootPath) {
-    cmSystemTools::ExpandListArgument(rootPath, roots);
+    cmExpandList(rootPath, roots);
   }
   if (sysrootCompile) {
-    roots.push_back(sysrootCompile);
+    roots.emplace_back(sysrootCompile);
   }
   if (sysrootLink) {
-    roots.push_back(sysrootLink);
+    roots.emplace_back(sysrootLink);
   }
   if (sysroot) {
-    roots.push_back(sysroot);
+    roots.emplace_back(sysroot);
   }
   for (std::string& r : roots) {
     cmSystemTools::ConvertToUnixSlashes(r);
@@ -215,8 +235,7 @@ void cmFindCommon::RerootPaths(std::vector<std::string>& paths)
         rootedDir = up;
       } else if (!up.empty() && up[0] != '~') {
         // Start with the new root.
-        rootedDir = r;
-        rootedDir += "/";
+        rootedDir = cmStrCat(r, '/');
 
         // Append the original path with its old root removed.
         rootedDir += cmSystemTools::SplitPathRootComponent(up);
@@ -230,7 +249,7 @@ void cmFindCommon::RerootPaths(std::vector<std::string>& paths)
   // If searching both rooted and unrooted paths add the original
   // paths again.
   if (this->FindRootPathMode == RootPathModeBoth) {
-    paths.insert(paths.end(), unrootedPaths.begin(), unrootedPaths.end());
+    cmAppend(paths, unrootedPaths);
   }
 }
 
@@ -248,7 +267,7 @@ void cmFindCommon::GetIgnoredPaths(std::vector<std::string>& ignore)
       continue;
     }
 
-    cmSystemTools::ExpandListArgument(ignorePath, ignore);
+    cmExpandList(ignorePath, ignore);
   }
 
   for (std::string& i : ignore) {
@@ -300,13 +319,13 @@ void cmFindCommon::AddPathSuffix(std::string const& arg)
   if (suffix.empty()) {
     return;
   }
-  if (suffix[0] == '/') {
+  if (suffix.front() == '/') {
     suffix = suffix.substr(1);
   }
   if (suffix.empty()) {
     return;
   }
-  if (suffix[suffix.size() - 1] == '/') {
+  if (suffix.back() == '/') {
     suffix = suffix.substr(0, suffix.size() - 1);
   }
   if (suffix.empty()) {
@@ -314,12 +333,12 @@ void cmFindCommon::AddPathSuffix(std::string const& arg)
   }
 
   // Store the suffix.
-  this->SearchPathSuffixes.push_back(suffix);
+  this->SearchPathSuffixes.push_back(std::move(suffix));
 }
 
 void AddTrailingSlash(std::string& s)
 {
-  if (!s.empty() && *s.rbegin() != '/') {
+  if (!s.empty() && s.back() != '/') {
     s += '/';
   }
 }
@@ -329,7 +348,7 @@ void cmFindCommon::ComputeFinalPaths()
   std::set<std::string> ignored;
   this->GetIgnoredPaths(ignored);
 
-  // Combine the seperate path types, filtering out ignores
+  // Combine the separate path types, filtering out ignores
   this->SearchPaths.clear();
   std::vector<PathLabel>& allLabels = this->PathGroupLabelMap[PathGroup::All];
   for (PathLabel const& l : allLabels) {

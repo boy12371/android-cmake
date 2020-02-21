@@ -1,30 +1,25 @@
 #include "cmParseCoberturaCoverage.h"
 
-#include "cmCTest.h"
-#include "cmCTestCoverageHandler.h"
-#include "cmSystemTools.h"
-#include "cmXMLParser.h"
+#include <cstdlib>
+#include <cstring>
 
 #include "cmsys/FStream.hxx"
-#include <stdlib.h>
-#include <string.h>
+
+#include "cmCTest.h"
+#include "cmCTestCoverageHandler.h"
+#include "cmStringAlgorithms.h"
+#include "cmSystemTools.h"
+#include "cmXMLParser.h"
 
 class cmParseCoberturaCoverage::XMLParser : public cmXMLParser
 {
 public:
   XMLParser(cmCTest* ctest, cmCTestCoverageHandlerContainer& cont)
-    : CTest(ctest)
+    : FilePaths{ cont.SourceDir, cont.BinaryDir }
+    , CTest(ctest)
     , Coverage(cont)
   {
-    this->InSources = false;
-    this->InSource = false;
-    this->SkipThisClass = false;
-    this->FilePaths.push_back(this->Coverage.SourceDir);
-    this->FilePaths.push_back(this->Coverage.BinaryDir);
-    this->CurFileName.clear();
   }
-
-  ~XMLParser() override {}
 
 protected:
   void EndElement(const std::string& name) override
@@ -82,8 +77,8 @@ protected:
             // Check if this is a path that is relative to our source or
             // binary directories.
             for (std::string const& filePath : FilePaths) {
-              finalpath = filePath + "/" + filename;
-              if (cmSystemTools::FileExists(finalpath.c_str())) {
+              finalpath = cmStrCat(filePath, "/", filename);
+              if (cmSystemTools::FileExists(finalpath)) {
                 this->CurFileName = finalpath;
                 break;
               }
@@ -93,7 +88,7 @@ protected:
           cmsys::ifstream fin(this->CurFileName.c_str());
           if (this->CurFileName.empty() || !fin) {
             this->CurFileName =
-              this->Coverage.BinaryDir + "/" + atts[tagCount + 1];
+              cmStrCat(this->Coverage.BinaryDir, "/", atts[tagCount + 1]);
             fin.open(this->CurFileName.c_str());
             if (!fin) {
               cmCTestOptionalLog(this->CTest, HANDLER_VERBOSE_OUTPUT,
@@ -144,12 +139,12 @@ protected:
   }
 
 private:
-  bool InSources;
-  bool InSource;
-  bool SkipThisClass;
+  bool InSources = false;
+  bool InSource = false;
+  bool SkipThisClass = false;
   std::vector<std::string> FilePaths;
-  typedef cmCTestCoverageHandlerContainer::SingleFileCoverageVector
-    FileLinesType;
+  using FileLinesType =
+    cmCTestCoverageHandlerContainer::SingleFileCoverageVector;
   cmCTest* CTest;
   cmCTestCoverageHandlerContainer& Coverage;
   std::string CurFileName;

@@ -1,15 +1,17 @@
 // mfc1View.cpp : implementation of the Cmfc1View class
 //
 
+// clang-format off
 #include "stdafx.h"
 
 #include "mfc1.h"
 
 #include "mfc1Doc.h"
 #include "mfc1View.h"
+// clang-format on
 
 #ifdef _DEBUG
-#define new DEBUG_NEW
+#  define new DEBUG_NEW
 #endif
 
 // Cmfc1View

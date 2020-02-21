@@ -7,9 +7,9 @@
 
 #include <string>
 
-#include "cmAlgorithms.h"
 #include "cmListFileCache.h"
 #include "cmStateTypes.h"
+#include "cmStringAlgorithms.h"
 #include "cmSystemTools.h"
 
 class cmMessenger;
@@ -81,7 +81,7 @@ private:
                                           context)) {
           return nullptr;
         }
-        const char* configName = prop.c_str() + 9;
+        std::string configName = prop.substr(9);
         return ComputeLocation(tgt, configName);
       }
 

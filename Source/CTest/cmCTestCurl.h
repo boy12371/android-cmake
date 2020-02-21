@@ -5,9 +5,10 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cm_curl.h"
 #include <string>
 #include <vector>
+
+#include "cm_curl.h"
 
 class cmCTest;
 
@@ -16,7 +17,9 @@ class cmCTestCurl
 public:
   cmCTestCurl(cmCTest*);
   ~cmCTestCurl();
-  bool UploadFile(std::string const& url, std::string const& file,
+  cmCTestCurl(const cmCTestCurl&) = delete;
+  cmCTestCurl& operator=(const cmCTestCurl&) = delete;
+  bool UploadFile(std::string const& local_file, std::string const& url,
                   std::string const& fields, std::string& response);
   bool HttpRequest(std::string const& url, std::string const& fields,
                    std::string& response);

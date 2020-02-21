@@ -5,15 +5,16 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
+#include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "cmCursesCacheEntryComposite.h"
 #include "cmCursesForm.h"
 #include "cmCursesStandardIncludes.h"
 #include "cmStateTypes.h"
 
-#include <stddef.h>
-#include <string>
-#include <vector>
-
-class cmCursesCacheEntryComposite;
 class cmake;
 
 /** \class cmCursesMainForm
@@ -23,11 +24,12 @@ class cmake;
  */
 class cmCursesMainForm : public cmCursesForm
 {
-  CM_DISABLE_COPY(cmCursesMainForm)
-
 public:
-  cmCursesMainForm(std::vector<std::string> const& args, int initwidth);
+  cmCursesMainForm(std::vector<std::string> args, int initwidth);
   ~cmCursesMainForm() override;
+
+  cmCursesMainForm(cmCursesMainForm const&) = delete;
+  cmCursesMainForm& operator=(cmCursesMainForm const&) = delete;
 
   /**
    * Set the widgets which represent the cache entries.
@@ -80,7 +82,7 @@ public:
    * During a CMake run, an error handle should add errors
    * to be displayed afterwards.
    */
-  void AddError(const char* message, const char* title) override;
+  void AddError(const std::string& message, const char* title) override;
 
   /**
    * Used to do a configure. If argument is specified, it does only the check
@@ -101,8 +103,7 @@ public:
   /**
    * Progress callback
    */
-  static void UpdateProgressOld(const char* msg, float prog, void*);
-  static void UpdateProgress(const char* msg, float prog, void*);
+  void UpdateProgress(const std::string& msg, float prog);
 
 protected:
   // Copy the cache values from the user interface to the actual
@@ -122,10 +123,10 @@ protected:
   void JumpToCacheEntry(const char* str);
 
   // Copies of cache entries stored in the user interface
-  std::vector<cmCursesCacheEntryComposite*>* Entries;
+  std::vector<cmCursesCacheEntryComposite> Entries;
   // Errors produced during last run of cmake
   std::vector<std::string> Errors;
-  // Command line argumens to be passed to cmake each time
+  // Command line arguments to be passed to cmake each time
   // it is run
   std::vector<std::string> Args;
   // Message displayed when user presses 'h'
@@ -136,11 +137,7 @@ protected:
   static const char* s_ConstHelpMessage;
 
   // Fields displayed. Includes labels, new entry markers, entries
-  FIELD** Fields;
-  // Where is source of current project
-  std::string WhereSource;
-  // Where is cmake executable
-  std::string WhereCMake;
+  std::vector<FIELD*> Fields;
   // Number of entries shown (depends on mode -normal or advanced-)
   size_t NumberOfVisibleEntries;
   bool AdvancedMode;
@@ -150,7 +147,7 @@ protected:
   int NumberOfPages;
 
   int InitialWidth;
-  cmake* CMakeInstance;
+  std::unique_ptr<cmake> CMakeInstance;
 
   std::string SearchString;
   std::string OldSearchString;

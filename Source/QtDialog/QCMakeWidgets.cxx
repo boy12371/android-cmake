@@ -2,15 +2,17 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "QCMakeWidgets.h"
 
+#include <utility>
+
 #include <QDirModel>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QResizeEvent>
 #include <QToolButton>
 
-QCMakeFileEditor::QCMakeFileEditor(QWidget* p, const QString& var)
+QCMakeFileEditor::QCMakeFileEditor(QWidget* p, QString var)
   : QLineEdit(p)
-  , Variable(var)
+  , Variable(std::move(var))
 {
   this->ToolButton = new QToolButton(this);
   this->ToolButton->setText("...");

@@ -5,10 +5,11 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmsys/RegularExpression.hxx"
 #include <set>
 #include <string>
 #include <vector>
+
+#include "cmsys/RegularExpression.hxx"
 
 class cmSourceFile;
 class cmSourceGroupInternals;
@@ -26,7 +27,7 @@ class cmSourceGroupInternals;
 class cmSourceGroup
 {
 public:
-  cmSourceGroup(const char* name, const char* regex,
+  cmSourceGroup(std::string name, const char* regex,
                 const char* parentName = nullptr);
   cmSourceGroup(cmSourceGroup const& r);
   ~cmSourceGroup();
@@ -50,38 +51,38 @@ public:
   /**
    * Looks up child and returns it
    */
-  cmSourceGroup* LookupChild(const char* name) const;
+  cmSourceGroup* LookupChild(const std::string& name);
 
   /**
    * Get the name of this group.
    */
-  const char* GetName() const;
+  std::string const& GetName() const;
 
   /**
    * Get the full path name for group.
    */
-  const char* GetFullName() const;
+  std::string const& GetFullName() const;
 
   /**
    * Check if the given name matches this group's regex.
    */
-  bool MatchesRegex(const char* name);
+  bool MatchesRegex(const std::string& name);
 
   /**
    * Check if the given name matches this group's explicit file list.
    */
-  bool MatchesFiles(const char* name);
+  bool MatchesFiles(const std::string& name) const;
 
   /**
    * Check if the given name matches this group's explicit file list
    * in children.
    */
-  cmSourceGroup* MatchChildrenFiles(const char* name);
+  cmSourceGroup* MatchChildrenFiles(const std::string& name);
 
   /**
    * Check if the given name matches this group's regex in children.
    */
-  cmSourceGroup* MatchChildrenRegex(const char* name);
+  cmSourceGroup* MatchChildrenRegex(const std::string& name);
 
   /**
    * Assign the given source file to this group.  Used only by

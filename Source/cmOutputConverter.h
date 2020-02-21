@@ -7,10 +7,11 @@
 
 #include <string>
 
+#include <cm/string_view>
+
 #include "cmStateSnapshot.h"
 
 class cmState;
-class cmStateDirectory;
 
 class cmOutputConverter
 {
@@ -23,12 +24,11 @@ public:
     WATCOMQUOTE,
     RESPONSE
   };
-  std::string ConvertToOutputFormat(const std::string& source,
+  std::string ConvertToOutputFormat(cm::string_view source,
                                     OutputFormat output) const;
-  std::string ConvertDirectorySeparatorsForShell(
-    const std::string& source) const;
+  std::string ConvertDirectorySeparatorsForShell(cm::string_view source) const;
 
-  ///! for existing files convert to output path and short path if spaces
+  //! for existing files convert to output path and short path if spaces
   std::string ConvertToOutputForExisting(const std::string& remote,
                                          OutputFormat format = SHELL) const;
 
@@ -73,15 +73,15 @@ public:
     Shell_Flag_IsUnix = (1 << 8)
   };
 
-  std::string EscapeForShell(const std::string& str, bool makeVars = false,
+  std::string EscapeForShell(cm::string_view str, bool makeVars = false,
                              bool forEcho = false,
                              bool useWatcomQuote = false) const;
 
-  static std::string EscapeForCMake(const std::string& str);
+  static std::string EscapeForCMake(cm::string_view str);
 
   /** Compute an escaped version of the given argument for use in a
       windows shell.  */
-  static std::string EscapeWindowsShellArgument(const char* arg,
+  static std::string EscapeWindowsShellArgument(cm::string_view arg,
                                                 int shell_flags);
 
   enum FortranFormat
@@ -90,41 +90,17 @@ public:
     FortranFormatFixed,
     FortranFormatFree
   };
+  static FortranFormat GetFortranFormat(cm::string_view value);
   static FortranFormat GetFortranFormat(const char* value);
-
-  static bool ContainedInDirectory(std::string const& local_path,
-                                   std::string const& remote_path,
-                                   cmStateDirectory const& directory);
-
-  /**
-   * Convert the given remote path to a relative path with respect to
-   * the given local path.  Both paths must use forward slashes and not
-   * already be escaped or quoted.
-   * The conversion is skipped if the paths are not both in the source
-   * or both in the binary tree.
-   */
-  std::string ConvertToRelativePath(std::string const& local_path,
-                                    std::string const& remote_path) const;
-
-  /**
-   * Convert the given remote path to a relative path with respect to
-   * the given local path.  Both paths must use forward slashes and not
-   * already be escaped or quoted.
-   */
-  static std::string ForceToRelativePath(std::string const& local_path,
-                                         std::string const& remote_path);
 
 private:
   cmState* GetState() const;
 
-  static int Shell__CharIsWhitespace(char c);
-  static int Shell__CharNeedsQuotesOnUnix(char c);
-  static int Shell__CharNeedsQuotesOnWindows(char c);
-  static int Shell__CharNeedsQuotes(char c, int flags);
-  static int Shell__CharIsMakeVariableName(char c);
-  static const char* Shell__SkipMakeVariables(const char* c);
-  static int Shell__ArgumentNeedsQuotes(const char* in, int flags);
-  static std::string Shell__GetArgument(const char* in, int flags);
+  static bool Shell__CharNeedsQuotes(char c, int flags);
+  static cm::string_view::iterator Shell__SkipMakeVariables(
+    cm::string_view::iterator begin, cm::string_view::iterator end);
+  static bool Shell__ArgumentNeedsQuotes(cm::string_view in, int flags);
+  static std::string Shell__GetArgument(cm::string_view in, int flags);
 
 private:
   cmStateSnapshot StateSnapshot;

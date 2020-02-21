@@ -5,16 +5,23 @@
 
 #include "cmConfigure.h" // IWYU pragma: keep
 
-#include "cmCTestGenericHandler.h"
-
-#include "cmsys/RegularExpression.hxx"
+#include <chrono>
+#include <cstdint>
 #include <iosfwd>
 #include <map>
 #include <set>
-#include <stddef.h>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <stddef.h>
+
+#include "cmsys/RegularExpression.hxx"
+
+#include "cmCTestGenericHandler.h"
+#include "cmCTestResourceSpec.h"
+#include "cmDuration.h"
+#include "cmListFileCache.h"
 
 class cmCTest;
 class cmMakefile;
@@ -28,10 +35,9 @@ class cmCTestTestHandler : public cmCTestGenericHandler
 {
   friend class cmCTestRunTest;
   friend class cmCTestMultiProcessHandler;
-  friend class cmCTestBatchTestHandler;
 
 public:
-  typedef cmCTestGenericHandler Superclass;
+  using Superclass = cmCTestGenericHandler;
 
   /**
    * The main entry point for this class
@@ -39,7 +45,7 @@ public:
   int ProcessHandler() override;
 
   /**
-   * When both -R and -I are used should te resulting test list be the
+   * When both -R and -I are used should the resulting test list be the
    * intersection or the union of the lists. By default it is the
    * intersection.
    */
@@ -56,7 +62,7 @@ public:
    */
   void PopulateCustomVectors(cmMakefile* mf) override;
 
-  ///! Control the use of the regular expresisons, call these methods to turn
+  //! Control the use of the regular expresisons, call these methods to turn
   /// them on
   void UseIncludeRegExp();
   void UseExcludeRegExp();
@@ -75,7 +81,7 @@ public:
     this->CustomMaximumFailedTestOutputSize = n;
   }
 
-  ///! pass the -I argument down
+  //! pass the -I argument down
   void SetTestsToRunInformation(const char*);
 
   cmCTestTestHandler();
@@ -97,6 +103,16 @@ public:
 
   void Initialize() override;
 
+  struct cmCTestTestResourceRequirement
+  {
+    std::string ResourceType;
+    int SlotsNeeded;
+    int UnitsNeeded;
+
+    bool operator==(const cmCTestTestResourceRequirement& other) const;
+    bool operator!=(const cmCTestTestResourceRequirement& other) const;
+  };
+
   // NOTE: This struct is Saved/Restored
   // in cmCTestTestHandler, if you add to this class
   // then you must add the new members to that code or
@@ -115,6 +131,8 @@ public:
     std::vector<std::pair<cmsys::RegularExpression, std::string>>
       RequiredRegularExpressions;
     std::vector<std::pair<cmsys::RegularExpression, std::string>>
+      SkipRegularExpressions;
+    std::vector<std::pair<cmsys::RegularExpression, std::string>>
       TimeoutRegularExpressions;
     std::map<std::string, std::string> Measurements;
     bool IsInBasedOnREOptions;
@@ -123,12 +141,14 @@ public:
     float Cost;
     int PreviousRuns;
     bool RunSerial;
-    double Timeout;
+    cmDuration Timeout;
     bool ExplicitTimeout;
-    double AlternateTimeout;
+    cmDuration AlternateTimeout;
     int Index;
     // Requested number of process slots
     int Processors;
+    bool WantAffinity;
+    std::vector<size_t> Affinity;
     // return code of test which will mark test as "not run"
     int SkipReturnCode;
     std::vector<std::string> Environment;
@@ -138,6 +158,9 @@ public:
     std::set<std::string> FixturesCleanup;
     std::set<std::string> FixturesRequired;
     std::set<std::string> RequireSuccessDepends;
+    std::vector<std::vector<cmCTestTestResourceRequirement>> ResourceGroups;
+    // Private test generator properties used to track backtraces
+    cmListFileBacktrace Backtrace;
   };
 
   struct cmCTestTestResult
@@ -146,8 +169,8 @@ public:
     std::string Path;
     std::string Reason;
     std::string FullCommandLine;
-    double ExecutionTime;
-    int ReturnValue;
+    cmDuration ExecutionTime;
+    std::int64_t ReturnValue;
     int Status;
     std::string ExceptionStatus;
     bool CompressOutput;
@@ -179,14 +202,30 @@ public:
                                     std::vector<std::string>& extraPaths,
                                     std::vector<std::string>& failed);
 
-  typedef std::vector<cmCTestTestProperties> ListOfTests;
+  static bool ParseResourceGroupsProperty(
+    const std::string& val,
+    std::vector<std::vector<cmCTestTestResourceRequirement>>& resourceGroups);
+
+  using ListOfTests = std::vector<cmCTestTestProperties>;
 
 protected:
+  using SetOfTests =
+    std::set<cmCTestTestHandler::cmCTestTestResult, cmCTestTestResultLess>;
+
   // compute a final test list
   virtual int PreProcessHandler();
   virtual int PostProcessHandler();
   virtual void GenerateTestCommand(std::vector<std::string>& args, int test);
   int ExecuteCommands(std::vector<std::string>& vec);
+
+  bool ProcessOptions();
+  void LogTestSummary(const std::vector<std::string>& passed,
+                      const std::vector<std::string>& failed,
+                      const cmDuration& durationInSecs);
+  void LogDisabledTests(const std::vector<cmCTestTestResult>& disabledTests);
+  void LogFailedTests(const std::vector<std::string>& failed,
+                      const SetOfTests& resultsSet);
+  bool GenerateXML();
 
   void WriteTestResultHeader(cmXMLWriter& xml,
                              cmCTestTestResult const& result);
@@ -198,16 +237,16 @@ protected:
   //! Clean test output to specified length
   bool CleanTestOutput(std::string& output, size_t length);
 
-  double ElapsedTestingTime;
+  cmDuration ElapsedTestingTime;
 
-  typedef std::vector<cmCTestTestResult> TestResultsVector;
+  using TestResultsVector = std::vector<cmCTestTestResult>;
   TestResultsVector TestResults;
 
   std::vector<std::string> CustomTestsIgnore;
   std::string StartTest;
   std::string EndTest;
-  unsigned int StartTestTime;
-  unsigned int EndTestTime;
+  std::chrono::system_clock::time_point StartTestTime;
+  std::chrono::system_clock::time_point EndTestTime;
   bool MemCheck;
   int CustomMaximumPassedTestOutputSize;
   int CustomMaximumFailedTestOutputSize;
@@ -271,7 +310,7 @@ private:
    */
   std::string FindTheExecutable(const char* exe);
 
-  const char* GetTestStatus(cmCTestTestResult const&);
+  std::string GetTestStatus(cmCTestTestResult const&);
   void ExpandTestsToRunInformation(size_t numPossibleTests);
   void ExpandTestsToRunInformationForRerunFailed();
 
@@ -296,6 +335,9 @@ private:
   cmsys::RegularExpression ExcludeLabelRegularExpression;
   cmsys::RegularExpression IncludeTestsRegularExpression;
   cmsys::RegularExpression ExcludeTestsRegularExpression;
+
+  bool UseResourceSpec;
+  cmCTestResourceSpec ResourceSpec;
 
   void GenerateRegressionImages(cmXMLWriter& xml, const std::string& dart);
   cmsys::RegularExpression DartStuff1;

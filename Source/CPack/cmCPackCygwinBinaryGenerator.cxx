@@ -2,6 +2,8 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmCPackCygwinBinaryGenerator.h"
 
+#include "cmsys/SystemTools.hxx"
+
 #include "cmCPackLog.h"
 #include "cmGeneratedFileStream.h"
 #include "cmGlobalGenerator.h"
@@ -9,9 +11,8 @@
 #include "cmSystemTools.h"
 #include "cmake.h"
 
-#include "cmsys/SystemTools.hxx"
-
 cmCPackCygwinBinaryGenerator::cmCPackCygwinBinaryGenerator()
+  : cmCPackArchiveGenerator(cmArchiveWrite::CompressBZip2, "paxr", ".tar.bz2")
 {
 }
 
@@ -28,13 +29,11 @@ int cmCPackCygwinBinaryGenerator::InitializeInternal()
 
 int cmCPackCygwinBinaryGenerator::PackageFiles()
 {
-  std::string packageName = this->GetOption("CPACK_PACKAGE_NAME");
-  packageName += "-";
-  packageName += this->GetOption("CPACK_PACKAGE_VERSION");
+  std::string packageName =
+    cmStrCat(this->GetOption("CPACK_PACKAGE_NAME"), '-',
+             this->GetOption("CPACK_PACKAGE_VERSION"));
   packageName = cmsys::SystemTools::LowerCase(packageName);
-  std::string manifest = "/usr/share/doc/";
-  manifest += packageName;
-  manifest += "/MANIFEST";
+  std::string manifest = cmStrCat("/usr/share/doc/", packageName, "/MANIFEST");
   std::string manifestFile = this->GetOption("CPACK_TEMPORARY_DIRECTORY");
   // Create a MANIFEST file that contains all of the files in
   // the tar file
@@ -44,10 +43,9 @@ int cmCPackCygwinBinaryGenerator::PackageFiles()
   // to create the file before the super class is called
   {
     cmGeneratedFileStream ofs(manifestFile.c_str());
-    for (std::vector<std::string>::const_iterator i = files.begin();
-         i != files.end(); ++i) {
+    for (std::string const& file : files) {
       // remove the temp dir and replace with /usr
-      ofs << (*i).substr(tempdir.size()) << "\n";
+      ofs << file.substr(tempdir.size()) << "\n";
     }
     ofs << manifest << "\n";
   }

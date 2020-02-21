@@ -6,9 +6,6 @@ if(NOT ANDROID)
 endif()
 
 foreach(f
-    "${CMAKE_C_ANDROID_TOOLCHAIN_PREFIX}gcc${CMAKE_C_ANDROID_TOOLCHAIN_SUFFIX}"
-    "${CMAKE_CXX_ANDROID_TOOLCHAIN_PREFIX}g++${CMAKE_CXX_ANDROID_TOOLCHAIN_SUFFIX}"
-    "${CMAKE_CXX_ANDROID_TOOLCHAIN_PREFIX}cpp${CMAKE_CXX_ANDROID_TOOLCHAIN_SUFFIX}"
     "${CMAKE_CXX_ANDROID_TOOLCHAIN_PREFIX}ar${CMAKE_CXX_ANDROID_TOOLCHAIN_SUFFIX}"
     "${CMAKE_CXX_ANDROID_TOOLCHAIN_PREFIX}ld${CMAKE_CXX_ANDROID_TOOLCHAIN_SUFFIX}"
     )
@@ -52,21 +49,26 @@ elseif(CMAKE_ANDROID_STANDALONE_TOOLCHAIN)
   endif()
 endif()
 
-execute_process(
-  COMMAND "${CMAKE_C_ANDROID_TOOLCHAIN_PREFIX}gcc${CMAKE_C_ANDROID_TOOLCHAIN_SUFFIX}" -dumpmachine
-  OUTPUT_VARIABLE _out OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_VARIABLE _err
-  RESULT_VARIABLE _res
-  )
-if(NOT _res EQUAL 0)
-  message(SEND_ERROR "Failed to run 'gcc -dumpmachine':\n ${_res}")
-endif()
-if(NOT _out STREQUAL "${CMAKE_C_ANDROID_TOOLCHAIN_MACHINE}")
-  message(SEND_ERROR "'gcc -dumpmachine' produced:\n"
-    " ${_out}\n"
-    "which is not equal to CMAKE_C_ANDROID_TOOLCHAIN_MACHINE:\n"
-    " ${CMAKE_C_ANDROID_TOOLCHAIN_MACHINE}"
+set(gcc ${CMAKE_C_ANDROID_TOOLCHAIN_PREFIX}gcc${CMAKE_C_ANDROID_TOOLCHAIN_SUFFIX})
+if(EXISTS "${gcc}")
+  execute_process(
+    COMMAND "${CMAKE_C_ANDROID_TOOLCHAIN_PREFIX}gcc${CMAKE_C_ANDROID_TOOLCHAIN_SUFFIX}" -dumpmachine
+    OUTPUT_VARIABLE _out OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE _err
+    RESULT_VARIABLE _res
     )
+  if(NOT _res EQUAL 0)
+    message(SEND_ERROR "Failed to run 'gcc -dumpmachine':\n ${_res}")
+  endif()
+  string(REPLACE "--" "-" _out_check "${_out}")
+  if(NOT _out_check STREQUAL "${CMAKE_C_ANDROID_TOOLCHAIN_MACHINE}"
+      AND NOT (_out STREQUAL "arm--linux-android" AND CMAKE_C_ANDROID_TOOLCHAIN_MACHINE STREQUAL "arm-linux-androideabi"))
+    message(SEND_ERROR "'gcc -dumpmachine' produced:\n"
+      " ${_out}\n"
+      "which does not match CMAKE_C_ANDROID_TOOLCHAIN_MACHINE:\n"
+      " ${CMAKE_C_ANDROID_TOOLCHAIN_MACHINE}"
+      )
+  endif()
 endif()
 
 if(CMAKE_ANDROID_STL_TYPE STREQUAL "none")
@@ -92,6 +94,23 @@ if(CMAKE_ANDROID_ARCH_ABI STREQUAL "armeabi-v7a")
 endif()
 add_executable(android_c android.c)
 add_executable(android_cxx android.cxx)
+add_library(android_cxx_lib SHARED android_lib.cxx)
+
+set(objdump "${CMAKE_CXX_ANDROID_TOOLCHAIN_PREFIX}objdump")
+if(NOT EXISTS "${objdump}")
+  message(FATAL_ERROR "Expected tool missing:\n  ${objdump}")
+endif()
+
+if(NOT CMAKE_ANDROID_STL_TYPE MATCHES "^(system|stlport_static|stlport_shared)$")
+  foreach(tgt android_cxx android_cxx_lib)
+    add_custom_command(TARGET ${tgt} POST_BUILD
+      COMMAND ${CMAKE_COMMAND}
+        -Dobjdump=${objdump}
+        -Dfile=$<TARGET_FILE:${tgt}>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/check_binary.cmake
+      )
+  endforeach()
+endif()
 
 # Test that an explicit /usr/include is ignored in favor of
 # appearing as a standard include directory at the end.

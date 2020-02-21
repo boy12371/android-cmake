@@ -4,11 +4,11 @@
 #include "cmStateSnapshot.h"
 
 #include <algorithm>
-#include <assert.h>
-#include <iterator>
-#include <stdio.h>
+#include <cassert>
+#include <string>
 
-#include "cmAlgorithms.h"
+#include <cm/iterator>
+
 #include "cmDefinitions.h"
 #include "cmListFileCache.h"
 #include "cmPropertyMap.h"
@@ -16,19 +16,17 @@
 #include "cmStateDirectory.h"
 #include "cmStatePrivate.h"
 #include "cmVersion.h"
-#include "cmake.h"
 
 #if !defined(_WIN32)
-#include <sys/utsname.h>
+#  include <sys/utsname.h>
 #endif
 
 #if defined(__CYGWIN__)
-#include "cmSystemTools.h"
+#  include "cmSystemTools.h"
 #endif
 
 cmStateSnapshot::cmStateSnapshot(cmState* state)
   : State(state)
-  , Position()
 {
 }
 
@@ -64,6 +62,11 @@ bool cmStateSnapshot::IsValid() const
   return this->State && this->Position.IsValid()
     ? this->Position != this->State->SnapshotData.Root()
     : false;
+}
+
+cmStateSnapshot cmStateSnapshot::GetBuildsystemDirectory() const
+{
+  return { this->State, this->Position->BuildSystemDirectory->DirectoryEnd };
 }
 
 cmStateSnapshot cmStateSnapshot::GetBuildsystemDirectoryParent() const
@@ -122,7 +125,7 @@ cmStateSnapshot cmStateSnapshot::GetCallStackBottom() const
          pos != this->State->SnapshotData.Root()) {
     ++pos;
   }
-  return cmStateSnapshot(this->State, pos);
+  return { this->State, pos };
 }
 
 void cmStateSnapshot::PushPolicy(cmPolicies::PolicyMap const& entry, bool weak)
@@ -160,8 +163,8 @@ void cmStateSnapshot::SetPolicy(cmPolicies::PolicyID id,
   }
 }
 
-cmPolicies::PolicyStatus cmStateSnapshot::GetPolicy(
-  cmPolicies::PolicyID id) const
+cmPolicies::PolicyStatus cmStateSnapshot::GetPolicy(cmPolicies::PolicyID id,
+                                                    bool parent_scope) const
 {
   cmPolicies::PolicyStatus status = cmPolicies::GetPolicyStatus(id);
 
@@ -180,6 +183,10 @@ cmPolicies::PolicyStatus cmStateSnapshot::GetPolicy(
     cmLinkedTree<cmStateDetail::PolicyStackEntry>::iterator root =
       dir->DirectoryEnd->PolicyRoot;
     for (; leaf != root; ++leaf) {
+      if (parent_scope) {
+        parent_scope = false;
+        continue;
+      }
       if (leaf->IsDefined(id)) {
         status = leaf->Get(id);
         return status;
@@ -200,7 +207,8 @@ bool cmStateSnapshot::HasDefinedPolicyCMP0011()
   return !this->Position->Policies->IsEmpty();
 }
 
-const char* cmStateSnapshot::GetDefinition(std::string const& name) const
+std::string const* cmStateSnapshot::GetDefinition(
+  std::string const& name) const
 {
   assert(this->Position->Vars.IsValid());
   return cmDefinitions::Get(name, this->Position->Vars, this->Position->Root);
@@ -213,14 +221,14 @@ bool cmStateSnapshot::IsInitialized(std::string const& name) const
 }
 
 void cmStateSnapshot::SetDefinition(std::string const& name,
-                                    std::string const& value)
+                                    cm::string_view value)
 {
-  this->Position->Vars->Set(name, value.c_str());
+  this->Position->Vars->Set(name, value);
 }
 
 void cmStateSnapshot::RemoveDefinition(std::string const& name)
 {
-  this->Position->Vars->Set(name, nullptr);
+  this->Position->Vars->Unset(name);
 }
 
 std::vector<std::string> cmStateSnapshot::UnusedKeys() const
@@ -255,7 +263,11 @@ bool cmStateSnapshot::RaiseScope(std::string const& var, const char* varDef)
   cmDefinitions::Raise(var, this->Position->Vars, this->Position->Root);
 
   // Now update the definition in the parent scope.
-  this->Position->Parent->Set(var, varDef);
+  if (varDef) {
+    this->Position->Parent->Set(var, varDef);
+  } else {
+    this->Position->Parent->Unset(var);
+  }
   return true;
 }
 
@@ -264,22 +276,18 @@ void InitializeContentFromParent(T& parentContent, T& thisContent,
                                  U& parentBacktraces, U& thisBacktraces,
                                  V& contentEndPosition)
 {
-  std::vector<std::string>::const_iterator parentBegin = parentContent.begin();
-  std::vector<std::string>::const_iterator parentEnd = parentContent.end();
+  auto parentBegin = parentContent.begin();
+  auto parentEnd = parentContent.end();
 
-  std::vector<std::string>::const_reverse_iterator parentRbegin =
-    cmMakeReverseIterator(parentEnd);
-  std::vector<std::string>::const_reverse_iterator parentRend =
-    parentContent.rend();
+  auto parentRbegin = cm::make_reverse_iterator(parentEnd);
+  auto parentRend = parentContent.rend();
   parentRbegin = std::find(parentRbegin, parentRend, cmPropertySentinal);
-  std::vector<std::string>::const_iterator parentIt = parentRbegin.base();
+  auto parentIt = parentRbegin.base();
 
   thisContent = std::vector<std::string>(parentIt, parentEnd);
 
-  std::vector<cmListFileBacktrace>::const_iterator btIt =
-    parentBacktraces.begin() + std::distance(parentBegin, parentIt);
-  std::vector<cmListFileBacktrace>::const_iterator btEnd =
-    parentBacktraces.end();
+  auto btIt = parentBacktraces.begin() + std::distance(parentBegin, parentIt);
+  auto btEnd = parentBacktraces.end();
 
   thisBacktraces = std::vector<cmListFileBacktrace>(btIt, btEnd);
 
@@ -315,7 +323,7 @@ void cmStateSnapshot::SetDefaultDefinitions()
 #if defined(__CYGWIN__)
   std::string legacy;
   if (cmSystemTools::GetEnv("CMAKE_LEGACY_CYGWIN_WIN32", legacy) &&
-      cmSystemTools::IsOn(legacy.c_str())) {
+      cmIsOn(legacy.c_str())) {
     this->SetDefinition("WIN32", "1");
     this->SetDefinition("CMAKE_HOST_WIN32", "1");
   }
@@ -328,19 +336,17 @@ void cmStateSnapshot::SetDefaultDefinitions()
   this->SetDefinition("CMAKE_HOST_SOLARIS", "1");
 #endif
 
-  char temp[1024];
-  sprintf(temp, "%d", cmVersion::GetMinorVersion());
-  this->SetDefinition("CMAKE_MINOR_VERSION", temp);
-  sprintf(temp, "%d", cmVersion::GetMajorVersion());
-  this->SetDefinition("CMAKE_MAJOR_VERSION", temp);
-  sprintf(temp, "%d", cmVersion::GetPatchVersion());
-  this->SetDefinition("CMAKE_PATCH_VERSION", temp);
-  sprintf(temp, "%d", cmVersion::GetTweakVersion());
-  this->SetDefinition("CMAKE_TWEAK_VERSION", temp);
+  this->SetDefinition("CMAKE_MAJOR_VERSION",
+                      std::to_string(cmVersion::GetMajorVersion()));
+  this->SetDefinition("CMAKE_MINOR_VERSION",
+                      std::to_string(cmVersion::GetMinorVersion()));
+  this->SetDefinition("CMAKE_PATCH_VERSION",
+                      std::to_string(cmVersion::GetPatchVersion()));
+  this->SetDefinition("CMAKE_TWEAK_VERSION",
+                      std::to_string(cmVersion::GetTweakVersion()));
   this->SetDefinition("CMAKE_VERSION", cmVersion::GetCMakeVersion());
 
-  this->SetDefinition("CMAKE_FILES_DIRECTORY",
-                      cmake::GetCMakeFilesDirectory());
+  this->SetDefinition("CMAKE_FILES_DIRECTORY", "/CMakeFiles");
 
   // Setup the default include file regular expression (match everything).
   this->Position->BuildSystemDirectory->Properties.SetProperty(
@@ -386,6 +392,26 @@ void cmStateSnapshot::InitializeFromParent()
     parent->BuildSystemDirectory->CompileOptionsBacktraces,
     this->Position->BuildSystemDirectory->CompileOptionsBacktraces,
     this->Position->CompileOptionsPosition);
+
+  InitializeContentFromParent(
+    parent->BuildSystemDirectory->LinkOptions,
+    this->Position->BuildSystemDirectory->LinkOptions,
+    parent->BuildSystemDirectory->LinkOptionsBacktraces,
+    this->Position->BuildSystemDirectory->LinkOptionsBacktraces,
+    this->Position->LinkOptionsPosition);
+
+  InitializeContentFromParent(
+    parent->BuildSystemDirectory->LinkDirectories,
+    this->Position->BuildSystemDirectory->LinkDirectories,
+    parent->BuildSystemDirectory->LinkDirectoriesBacktraces,
+    this->Position->BuildSystemDirectory->LinkDirectoriesBacktraces,
+    this->Position->LinkDirectoriesPosition);
+
+  const char* include_regex =
+    parent->BuildSystemDirectory->Properties.GetPropertyValue(
+      "INCLUDE_REGULAR_EXPRESSION");
+  this->Position->BuildSystemDirectory->Properties.SetProperty(
+    "INCLUDE_REGULAR_EXPRESSION", include_regex);
 }
 
 cmState* cmStateSnapshot::GetState() const
@@ -395,7 +421,7 @@ cmState* cmStateSnapshot::GetState() const
 
 cmStateDirectory cmStateSnapshot::GetDirectory() const
 {
-  return cmStateDirectory(this->Position->BuildSystemDirectory, *this);
+  return { this->Position->BuildSystemDirectory, *this };
 }
 
 void cmStateSnapshot::SetProjectName(const std::string& name)
@@ -410,8 +436,8 @@ std::string cmStateSnapshot::GetProjectName() const
 
 void cmStateSnapshot::InitializeFromParent_ForSubdirsCommand()
 {
-  std::string currentSrcDir = this->GetDefinition("CMAKE_CURRENT_SOURCE_DIR");
-  std::string currentBinDir = this->GetDefinition("CMAKE_CURRENT_BINARY_DIR");
+  std::string currentSrcDir = *this->GetDefinition("CMAKE_CURRENT_SOURCE_DIR");
+  std::string currentBinDir = *this->GetDefinition("CMAKE_CURRENT_BINARY_DIR");
   this->InitializeFromParent();
   this->SetDefinition("CMAKE_SOURCE_DIR", this->State->GetSourceDirectory());
   this->SetDefinition("CMAKE_BINARY_DIR", this->State->GetBinaryDirectory());

@@ -3,16 +3,20 @@
 #ifndef RegexExplorer_h
 #define RegexExplorer_h
 
-#include "cmsys/RegularExpression.hxx"
-#include <QDialog>
 #include <string>
+
+#include <QDialog>
+
+#include "cmsys/RegularExpression.hxx"
 
 #include "ui_RegexExplorer.h"
 
 class QString;
 class QWidget;
 
-class RegexExplorer : public QDialog, public Ui::RegexExplorer
+class RegexExplorer
+  : public QDialog
+  , public Ui::RegexExplorer
 {
   Q_OBJECT
 public:

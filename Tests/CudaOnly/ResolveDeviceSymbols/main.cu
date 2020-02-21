@@ -1,25 +1,9 @@
 
 #include <iostream>
 
-#include "file1.h"
 #include "file2.h"
 
 int file2_launch_kernel(int x);
-
-result_type_dynamic __device__ file2_func(int x);
-static __global__ void main_kernel(result_type_dynamic& r, int x)
-{
-  // call function that was not device linked to us, this will cause
-  // a runtime failure of "invalid device function"
-  r = file2_func(x);
-}
-
-int main_launch_kernel(int x)
-{
-  result_type_dynamic r;
-  main_kernel<<<1, 1>>>(r, x);
-  return r.sum;
-}
 
 int choose_cuda_device()
 {
@@ -62,21 +46,10 @@ int main(int argc, char** argv)
     return 0;
   }
 
-  cudaError_t err;
-  file2_launch_kernel(42);
-  err = cudaGetLastError();
+  file2_launch_kernel(1);
+  cudaError_t err = cudaGetLastError();
   if (err != cudaSuccess) {
-    std::cerr << "file2_launch_kernel: kernel launch failed: "
-              << cudaGetErrorString(err) << std::endl;
-    return 1;
-  }
-
-  main_launch_kernel(1);
-  err = cudaGetLastError();
-  if (err == cudaSuccess) {
-    // This kernel launch should fail as the file2_func was device linked
-    // into the static library and is not usable by the executable
-    std::cerr << "main_launch_kernel: kernel launch should have failed"
+    std::cerr << "file2_launch_kernel: kernel launch should have passed"
               << std::endl;
     return 1;
   }

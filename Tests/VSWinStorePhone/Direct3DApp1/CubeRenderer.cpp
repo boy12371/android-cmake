@@ -1,16 +1,22 @@
+// clang-format off
 #include "pch.h"
 
 #include "CubeRenderer.h"
+// clang-format on
 
 using namespace DirectX;
 using namespace Microsoft::WRL;
 using namespace Windows::Foundation;
 using namespace Windows::UI::Core;
+using namespace JusticeLeagueWinRT;
 
 CubeRenderer::CubeRenderer()
   : m_loadingComplete(false)
   , m_indexCount(0)
 {
+  // Create a new WinRT object to validate that we can link properly
+  Batman ^ hero = ref new Batman();
+  hero->savePeople();
 }
 
 void CubeRenderer::CreateDeviceResources()

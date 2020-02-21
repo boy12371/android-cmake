@@ -2,9 +2,9 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmWIXPatchParser.h"
 
-#include "cmCPackGenerator.h"
-
 #include "cm_expat.h"
+
+#include "cmCPackGenerator.h"
 
 cmWIXPatchNode::Type cmWIXPatchText::type()
 {
@@ -90,7 +90,7 @@ void cmWIXPatchParser::StartFragment(const char** attributes)
     }
   }
 
-  /* add any additional attributes for the fragement */
+  /* add any additional attributes for the fragment */
   if (!new_element) {
     ReportValidationError("No 'Id' specified for 'CPackWixFragment' element");
   } else {
