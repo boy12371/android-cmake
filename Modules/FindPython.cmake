@@ -93,6 +93,13 @@ This module will set the following variables in your project
 
   Information returned by
   ``distutils.sysconfig.get_python_lib(plat_specific=True,standard_lib=False)``.
+``Python_SOABI``
+  Extension suffix for modules.
+
+  Information returned by
+  ``distutils.sysconfig.get_config_flag('SOABI')`` or computed from
+  ``distutils.sysconfig.get_config_flag('EXT_SUFFIX')`` or
+  ``python-config --extension-suffix``.
 ``Python_Compiler_FOUND``
   System has the Python compiler.
 ``Python_COMPILER``
@@ -220,12 +227,12 @@ Hints
   variable will be used, if any.
 
 ``Python_FIND_VIRTUALENV``
-  This variable defines the handling of virtual environments. It is meaningfull
-  only when a virtual environment is active (i.e. the ``activate`` script has
-  been evaluated). In this case, it takes precedence over
-  ``Python_FIND_REGISTRY`` and ``CMAKE_FIND_FRAMEWORK`` variables.
-  The ``Python_FIND_VIRTUALENV`` variable can be set to empty or one of the
-  following:
+  This variable defines the handling of virtual environments managed by
+  ``virtualenv`` or ``conda``. It is meaningful only when a virtual environment
+  is active (i.e. the ``activate`` script has been evaluated). In this case, it
+  takes precedence over ``Python_FIND_REGISTRY`` and ``CMAKE_FIND_FRAMEWORK``
+  variables.  The ``Python_FIND_VIRTUALENV`` variable can be set to empty or
+  one of the following:
 
   * ``FIRST``: The virtual environment is used before any other standard
     paths to look-up for the interpreter. This is the default.
@@ -290,9 +297,13 @@ This module defines the command ``Python_add_library`` (when
 when library type is ``MODULE``, to target ``Python::Module`` and takes care of
 Python module naming rules::
 
-  Python_add_library (my_module MODULE src1.cpp)
+  Python_add_library (<name> [STATIC | SHARED | MODULE [WITH_SOABI]]
+                      <source1> [<source2> ...])
 
-If library type is not specified, ``MODULE`` is assumed.
+If the library type is not specified, ``MODULE`` is assumed.
+
+For ``MODULE`` library type, if option ``WITH_SOABI`` is specified, the
+module suffix will include the ``Python_SOABI`` value, if any.
 #]=======================================================================]
 
 

@@ -248,6 +248,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/FindPackageHandleStandardArgs.cmake)
 # Save project's policies
 cmake_policy(PUSH)
 cmake_policy(SET CMP0057 NEW) # if IN_LIST
+cmake_policy(SET CMP0102 NEW) # if mark_as_advanced(non_cache_var)
 
 function(_boost_get_existing_target component target_var)
   set(names "${component}")
@@ -441,7 +442,9 @@ if (NOT Boost_NO_BOOST_CMAKE)
   # Note that args are passed in the Boost_FIND_xxxxx variables, so there is no
   # need to delegate them to this find_package call.
   find_package(Boost QUIET NO_MODULE)
-  mark_as_advanced(Boost_DIR)
+  if (DEFINED Boost_DIR)
+    mark_as_advanced(Boost_DIR)
+  endif ()
 
   # If we found a boost cmake package, then we're done. Print out what we found.
   # Otherwise let the rest of the module try to find it.
@@ -1467,43 +1470,6 @@ _Boost_DEBUG_PRINT_VAR("${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}"
 _Boost_DEBUG_PRINT_VAR("${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}" "Boost_ADDITIONAL_VERSIONS")
 _Boost_DEBUG_PRINT_VAR("${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}" "Boost_NO_SYSTEM_PATHS")
 
-# Supply Boost_LIB_DIAGNOSTIC_DEFINITIONS as a convenience target. It
-# will only contain any interface definitions on WIN32, but is created
-# on all platforms to keep end user code free from platform dependent
-# code.  Also provide convenience targets to disable autolinking and
-# enable dynamic linking.
-if(NOT TARGET Boost::diagnostic_definitions)
-  add_library(Boost::diagnostic_definitions INTERFACE IMPORTED)
-  add_library(Boost::disable_autolinking INTERFACE IMPORTED)
-  add_library(Boost::dynamic_linking INTERFACE IMPORTED)
-  set_target_properties(Boost::dynamic_linking PROPERTIES
-    INTERFACE_COMPILE_DEFINITIONS "BOOST_ALL_DYN_LINK")
-endif()
-if(WIN32)
-  # In windows, automatic linking is performed, so you do not have
-  # to specify the libraries.  If you are linking to a dynamic
-  # runtime, then you can choose to link to either a static or a
-  # dynamic Boost library, the default is to do a static link.  You
-  # can alter this for a specific library "whatever" by defining
-  # BOOST_WHATEVER_DYN_LINK to force Boost library "whatever" to be
-  # linked dynamically.  Alternatively you can force all Boost
-  # libraries to dynamic link by defining BOOST_ALL_DYN_LINK.
-
-  # This feature can be disabled for Boost library "whatever" by
-  # defining BOOST_WHATEVER_NO_LIB, or for all of Boost by defining
-  # BOOST_ALL_NO_LIB.
-
-  # If you want to observe which libraries are being linked against
-  # then defining BOOST_LIB_DIAGNOSTIC will cause the auto-linking
-  # code to emit a #pragma message each time a library is selected
-  # for linking.
-  set(Boost_LIB_DIAGNOSTIC_DEFINITIONS "-DBOOST_LIB_DIAGNOSTIC")
-  set_target_properties(Boost::diagnostic_definitions PROPERTIES
-    INTERFACE_COMPILE_DEFINITIONS "BOOST_LIB_DIAGNOSTIC")
-  set_target_properties(Boost::disable_autolinking PROPERTIES
-    INTERFACE_COMPILE_DEFINITIONS "BOOST_ALL_NO_LIB")
-endif()
-
 cmake_policy(GET CMP0074 _Boost_CMP0074)
 if(NOT "x${_Boost_CMP0074}x" STREQUAL "xNEWx")
   _Boost_CHECK_SPELLING(Boost_ROOT)
@@ -2296,6 +2262,43 @@ if(Boost_FOUND)
       endif()
     endif()
   endforeach()
+
+  # Supply Boost_LIB_DIAGNOSTIC_DEFINITIONS as a convenience target. It
+  # will only contain any interface definitions on WIN32, but is created
+  # on all platforms to keep end user code free from platform dependent
+  # code.  Also provide convenience targets to disable autolinking and
+  # enable dynamic linking.
+  if(NOT TARGET Boost::diagnostic_definitions)
+    add_library(Boost::diagnostic_definitions INTERFACE IMPORTED)
+    add_library(Boost::disable_autolinking INTERFACE IMPORTED)
+    add_library(Boost::dynamic_linking INTERFACE IMPORTED)
+    set_target_properties(Boost::dynamic_linking PROPERTIES
+      INTERFACE_COMPILE_DEFINITIONS "BOOST_ALL_DYN_LINK")
+  endif()
+  if(WIN32)
+    # In windows, automatic linking is performed, so you do not have
+    # to specify the libraries.  If you are linking to a dynamic
+    # runtime, then you can choose to link to either a static or a
+    # dynamic Boost library, the default is to do a static link.  You
+    # can alter this for a specific library "whatever" by defining
+    # BOOST_WHATEVER_DYN_LINK to force Boost library "whatever" to be
+    # linked dynamically.  Alternatively you can force all Boost
+    # libraries to dynamic link by defining BOOST_ALL_DYN_LINK.
+
+    # This feature can be disabled for Boost library "whatever" by
+    # defining BOOST_WHATEVER_NO_LIB, or for all of Boost by defining
+    # BOOST_ALL_NO_LIB.
+
+    # If you want to observe which libraries are being linked against
+    # then defining BOOST_LIB_DIAGNOSTIC will cause the auto-linking
+    # code to emit a #pragma message each time a library is selected
+    # for linking.
+    set(Boost_LIB_DIAGNOSTIC_DEFINITIONS "-DBOOST_LIB_DIAGNOSTIC")
+    set_target_properties(Boost::diagnostic_definitions PROPERTIES
+      INTERFACE_COMPILE_DEFINITIONS "BOOST_LIB_DIAGNOSTIC")
+    set_target_properties(Boost::disable_autolinking PROPERTIES
+      INTERFACE_COMPILE_DEFINITIONS "BOOST_ALL_NO_LIB")
+  endif()
 endif()
 
 # ------------------------------------------------------------------------
