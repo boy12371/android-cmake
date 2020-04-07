@@ -5,7 +5,8 @@ import enum
 import os
 import subprocess
 import sys
-import tarfile
+import zipfile
+import textwrap
 
 @enum.unique
 class Host(enum.Enum):
@@ -139,26 +140,65 @@ def build_cmake_target(host, args):
     return install_dir
 
 
-def package_target(install_dir, package_name, dest_dir):
+def zip_dir(path, ziph):
+    """Zip a folder with archive paths relative to the root"""
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            install_file = os.path.join(root, file)
+            rel_file = os.path.relpath(install_file, path)
+            ziph.write(install_file, rel_file)
+
+
+def package_target(install_dir, package_name, source_properties, dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
-    package_path = os.path.join(dest_dir, package_name + '.tar.bz2')
+    package_path = os.path.join(dest_dir, package_name + '.zip')
 
     print('## Packaging ##')
     print('## Package     : {}'.format(package_path))
     print('## Install Dir : {}'.format(install_dir))
     sys.stdout.flush()
 
-    with tarfile.open(package_path, "w:bz2") as tar:
-        tar.add(install_dir, arcname=package_name)
+    with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zip:
+        zip_dir(install_dir, zip)
+        zip.writestr("source.properties", source_properties)
+
+
+def get_source_properties(cmake_target_version, build_id):
+    """Return a source.properties for CMake version and build ID"""
+    source_properties = textwrap.dedent("""\
+        Pkg.Revision = {cmake_target_version}
+        Pkg.Path = cmake;{cmake_target_version}.{build_id}
+        Pkg.Desc = CMake {cmake_target_version}.{build_id}
+    """.format(cmake_target_version=cmake_target_version, build_id=build_id))
+    return source_properties
+
+
+def get_cmake_version(install_dir):
+    """Return result of 'cmake --version'"""
+    cmake_bin = os.path.join(install_dir, "bin")
+    if get_default_host() == Host.Windows:
+        cmake_exe = os.path.join(cmake_bin, "cmake.exe")
+    else:
+        cmake_exe = os.path.join(cmake_bin, "cmake")
+    cmd = [cmake_exe, "--version"]
+    print(subprocess.list2cmdline(cmd))
+    output_bytes = subprocess.check_output(cmd)
+    text = output_bytes.decode("UTF-8")
+    first_line = text.splitlines()[0]  # Should be like 'cmake version 3.17.0-g6cb76b9'
+    version_with_sha = first_line.split()[2]  # Should be like '3.17.0-g6cb76b9'
+    version = version_with_sha.split("-")[0]  # Should be like '3.17.0'
+    print("## CMake Version = '{}'".format(version))
+    return version
 
 
 def main():
     args = parse_arguments()
     host = get_default_host()
     install_dir = build_cmake_target(host, args)
-
+    cmake_target_version = get_cmake_version(install_dir)
+    source_properties = get_source_properties(cmake_target_version, args.build_id)
     package_name = 'cmake-{}-{}'.format(host.value, args.build_id)
-    package_target(install_dir, package_name, args.dest_dir)
+    package_target(install_dir, package_name, source_properties, args.dest_dir)
 
 
 if __name__ == '__main__':
