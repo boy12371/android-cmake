@@ -163,13 +163,14 @@ def package_target(install_dir, package_name, source_properties, dest_dir):
         zip.writestr("source.properties", source_properties)
 
 
-def get_source_properties(cmake_target_version, build_id):
+def get_source_properties(cmake_target_version):
     """Return a source.properties for CMake version and build ID"""
+
     source_properties = textwrap.dedent("""\
         Pkg.Revision = {cmake_target_version}
-        Pkg.Path = cmake;{cmake_target_version}.{build_id}
-        Pkg.Desc = CMake {cmake_target_version}.{build_id}
-    """.format(cmake_target_version=cmake_target_version, build_id=build_id))
+        Pkg.Path = cmake;{cmake_target_version}
+        Pkg.Desc = CMake {cmake_target_version}
+    """.format(cmake_target_version=cmake_target_version))
     return source_properties
 
 
@@ -196,8 +197,8 @@ def main():
     host = get_default_host()
     install_dir = build_cmake_target(host, args)
     cmake_target_version = get_cmake_version(install_dir)
-    source_properties = get_source_properties(cmake_target_version, args.build_id)
-    package_name = 'cmake-{}-{}'.format(host.value, args.build_id)
+    source_properties = get_source_properties(cmake_target_version)
+    package_name = 'cmake-{}-{}-{}'.format(host.value, cmake_target_version, args.build_id)
     package_target(install_dir, package_name, source_properties, args.dest_dir)
 
 
