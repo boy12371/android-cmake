@@ -25,8 +25,8 @@ $ENV:PATH = ($ENV:PATH.Split(';') | Where-Object { $_ -notmatch 'cygwin' }) -joi
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $PYTHON "$PSScriptRoot\build.py", $CMAKE_SRC, $OUT, $DEST, $ENV:KOKORO_BUILD_ID,
-  "--cmake=$ENV:KOKORO_ARTIFACTS_DIR\git\cmake\bin\cmake",
-  "--ninja=$ENV:KOKORO_ARTIFACTS_DIR\git\ninja\ninja",
-  "--clang-repo=$ENV:KOKORO_ARTIFACTS_DIR\git\clang"
+  "--cmake=$ENV:KOKORO_ARTIFACTS_DIR\git\cmake\bin\cmake.exe",
+  "--ninja=$ENV:KOKORO_ARTIFACTS_DIR\git\ninja\ninja.exe",
+  "--clang-repo=$ENV:KOKORO_ARTIFACTS_DIR\git\clang.exe"
 
 exit $LASTEXITCODE

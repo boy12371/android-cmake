@@ -149,7 +149,7 @@ def zip_dir(path, ziph):
             ziph.write(install_file, rel_file)
 
 
-def package_target(install_dir, package_name, source_properties, dest_dir):
+def package_target(install_dir, package_name, dest_dir):
     os.makedirs(dest_dir, exist_ok=True)
     package_path = os.path.join(dest_dir, package_name + '.zip')
 
@@ -160,7 +160,22 @@ def package_target(install_dir, package_name, source_properties, dest_dir):
 
     with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zip:
         zip_dir(install_dir, zip)
+
+
+def package_target_with_ninja(install_dir, package_name, source_properties, ninja_path, dest_dir):
+    """Create a package with ninja.exe and source.properties for Android SDK"""
+    os.makedirs(dest_dir, exist_ok=True)
+    package_path = os.path.join(dest_dir, package_name + '-with-ninja.zip')
+
+    print('## Packaging with Ninja ##')
+    print('## Package     : {}'.format(package_path))
+    print('## Install Dir : {}'.format(install_dir))
+    sys.stdout.flush()
+
+    with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zip:
+        zip_dir(install_dir, zip)
         zip.writestr("source.properties", source_properties)
+        zip.write(ninja_path, os.path.join("bin", os.path.basename(ninja_path)))
 
 
 def get_source_properties(cmake_target_version):
@@ -197,10 +212,10 @@ def main():
     host = get_default_host()
     install_dir = build_cmake_target(host, args)
     cmake_target_version = get_cmake_version(install_dir)
-    source_properties = get_source_properties(cmake_target_version)
     package_name = 'cmake-{}-{}-{}'.format(host.value, cmake_target_version, args.build_id)
-    package_target(install_dir, package_name, source_properties, args.dest_dir)
-
+    package_target(install_dir, package_name, args.dest_dir)
+    source_properties = get_source_properties(cmake_target_version)
+    package_target_with_ninja(install_dir, package_name, source_properties, args.ninja, args.dest_dir)
 
 if __name__ == '__main__':
     main()
