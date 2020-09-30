@@ -13,4 +13,5 @@ python3 --version
 python3 ${BASEDIR}/build.py "${CMAKE_SRC}" "${OUT}" "${DEST}" "${KOKORO_BUILD_ID}" \
   --cmake=${KOKORO_ARTIFACTS_DIR}/git/cmake/bin/cmake \
   --ninja=${KOKORO_ARTIFACTS_DIR}/git/ninja/ninja \
+  --android-cmake=${KOKORO_ARTIFACTS_DIR}/git/android-cmake \
   --clang-repo=${KOKORO_ARTIFACTS_DIR}/git/clang

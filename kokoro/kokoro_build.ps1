@@ -27,6 +27,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $PYTHON "$PSScriptRoot\build.py", $CMAKE_SRC, $OUT, $DEST, $ENV:KOKORO_BUILD_ID,
   "--cmake=$ENV:KOKORO_ARTIFACTS_DIR\git\cmake\bin\cmake.exe",
   "--ninja=$ENV:KOKORO_ARTIFACTS_DIR\git\ninja\ninja.exe",
-  "--clang-repo=$ENV:KOKORO_ARTIFACTS_DIR\git\clang.exe"
+  "--android-cmake=$ENV:KOKORO_ARTIFACTS_DIR\git\android-cmake"
+  "--clang-repo=$ENV:KOKORO_ARTIFACTS_DIR\git\clang"
 
 exit $LASTEXITCODE

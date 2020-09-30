@@ -2,11 +2,13 @@
 
 import argparse
 import enum
+import glob
 import os
 import subprocess
 import sys
 import zipfile
 import textwrap
+
 
 @enum.unique
 class Host(enum.Enum):
@@ -34,8 +36,14 @@ def parse_arguments():
     parser.add_argument('out_dir')
     parser.add_argument('dest_dir')
     parser.add_argument('build_id')
-    parser.add_argument('--cmake', default='cmake', help='Path to cmake binary')
-    parser.add_argument('--ninja', default='ninja', help='Path to ninja binary')
+    parser.add_argument('--cmake',
+                        default='cmake',
+                        help='Path to cmake binary.')
+    parser.add_argument('--ninja',
+                        default='ninja',
+                        help='Path to ninja binary.')
+    parser.add_argument('--android-cmake',
+                        help='Path to android-cmake repository.')
     parser.add_argument('--clang-repo', help='Path to clang repo.')
     return parser.parse_args()
 
@@ -47,7 +55,8 @@ def check_call(cmd, **kwargs):
 
 
 def find_latest_clang(repo_path):
-    all_dirs = (f for f in os.listdir(repo_path) if os.path.isdir(os.path.join(repo_path, f)))
+    all_dirs = (f for f in os.listdir(repo_path)
+                if os.path.isdir(os.path.join(repo_path, f)))
     clangs = (f for f in all_dirs if f.startswith('clang-r'))
     latest_clang = max(clangs)
     return os.path.join(repo_path, latest_clang)
@@ -75,7 +84,7 @@ def get_cmake_defines(host, args):
     defines = {}
     defines['CMAKE_BUILD_TYPE'] = 'Release'
 
-    if args.clang_repo and os.path.isdir(args.clang_repo):
+    if args.clang_repo:
         clang_path = find_latest_clang(args.clang_repo)
         if host == Host.Windows:
             cc = os.path.join(clang_path, 'bin', 'clang-cl.exe')
@@ -162,20 +171,30 @@ def package_target(install_dir, package_name, dest_dir):
         zip_dir(install_dir, zip)
 
 
-def package_target_with_ninja(install_dir, package_name, source_properties, ninja_path, dest_dir):
+def package_target_for_studio(install_dir, package_name, cmake_version,
+                              ninja_path, android_cmake, dest_dir):
     """Create a package with ninja.exe and source.properties for Android SDK"""
     os.makedirs(dest_dir, exist_ok=True)
-    package_path = os.path.join(dest_dir, package_name + '-with-ninja.zip')
+    package_path = os.path.join(dest_dir, package_name + '-for-studio.zip')
+    source_properties = get_source_properties(cmake_version)
 
     print('## Packaging with Ninja ##')
     print('## Package     : {}'.format(package_path))
     print('## Install Dir : {}'.format(install_dir))
     sys.stdout.flush()
 
+    module_path = glob.glob(os.path.join(install_dir, 'share', 'cmake-*'))[0]
+    module_path = os.path.basename(module_path)
     with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zip:
         zip_dir(install_dir, zip)
         zip.writestr("source.properties", source_properties)
-        zip.write(ninja_path, os.path.join("bin", os.path.basename(ninja_path)))
+        zip.write(ninja_path, os.path.join("bin",
+                                           os.path.basename(ninja_path)))
+        for cmake_file in ["AndroidNdkModules.cmake", "AndroidNdkGdb.cmake"]:
+            file_path = os.path.join(android_cmake, cmake_file)
+            zip.write(
+                file_path,
+                os.path.join("share", module_path, "Modules", cmake_file))
 
 
 def get_source_properties(cmake_target_version):
@@ -200,8 +219,10 @@ def get_cmake_version(install_dir):
     print(subprocess.list2cmdline(cmd))
     output_bytes = subprocess.check_output(cmd)
     text = output_bytes.decode("UTF-8")
-    first_line = text.splitlines()[0]  # Should be like 'cmake version 3.17.0-g6cb76b9'
-    version_with_sha = first_line.split()[2]  # Should be like '3.17.0-g6cb76b9'
+    # Should be like 'cmake version 3.17.0-g6cb76b9'
+    first_line = text.splitlines()[0]
+    # Should be like '3.17.0-g6cb76b9'
+    version_with_sha = first_line.split()[2]
     version = version_with_sha.split("-")[0]  # Should be like '3.17.0'
     print("## CMake Version = '{}'".format(version))
     return version
@@ -212,10 +233,12 @@ def main():
     host = get_default_host()
     install_dir = build_cmake_target(host, args)
     cmake_target_version = get_cmake_version(install_dir)
-    package_name = 'cmake-{}-{}-{}'.format(host.value, cmake_target_version, args.build_id)
+    package_name = 'cmake-{}-{}-{}'.format(host.value, cmake_target_version,
+                                           args.build_id)
     package_target(install_dir, package_name, args.dest_dir)
-    source_properties = get_source_properties(cmake_target_version)
-    package_target_with_ninja(install_dir, package_name, source_properties, args.ninja, args.dest_dir)
+    package_target_for_studio(install_dir, package_name, cmake_target_version,
+                              args.ninja, args.android_cmake, args.dest_dir)
+
 
 if __name__ == '__main__':
     main()
